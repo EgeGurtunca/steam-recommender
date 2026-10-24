@@ -23,6 +23,21 @@ class EASE:
         self.b = (p / -np.diag(p)).astype(np.float32)
         np.fill_diagonal(self.b, 0.0)
 
+    def save(self, folder) -> None:
+        """The 10.8K x 10.8K weights take minutes to build and half a second to load."""
+        from pathlib import Path
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        np.save(Path(folder) / "b.npy", self.b)
+        np.save(Path(folder) / "items.npy", self.item_ids)
+
+    @classmethod
+    def load(cls, folder, fallback: Sequence[int] = ()) -> "EASE":
+        from pathlib import Path
+        e = cls.__new__(cls)
+        e.b, e.item_ids, e.fallback = np.load(Path(folder) / "b.npy"), np.load(Path(folder) / "items.npy"), fallback
+        e.index = {int(a): i for i, a in enumerate(e.item_ids)}
+        return e
+
     def ranking(self, library: Library, n: int) -> list[int]:
         cols = [self.index[a] for a in library if a in self.index]
         if not cols:

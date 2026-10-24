@@ -105,7 +105,7 @@ def test_store_catalog_splits_the_merged_header(tmp_path):
     assert stats == {"apps": 1}
     store = data.load_store(tmp_path / "build")
     assert store[553850] == {"title": "HELLDIVERS 2", "released": "2024-02-08", "positive": 775883, "negative": 241752,
-                             "tags": ["Online Co-Op", "PvE", "Shooter"]}
+                             "tags": ["Online Co-Op", "PvE", "Shooter"], "genres": ["Action"]}
 
 
 def test_store_catalog_refuses_a_header_it_does_not_recognise(tmp_path):

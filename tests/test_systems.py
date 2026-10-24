@@ -106,3 +106,11 @@ def test_content_prior_breaks_ties_toward_popular_games():
     c = Content(catalog({1: ["Co-op"], 2: ["Co-op", "PvE"], 3: ["Co-op", "PvE"]}), prior={2: 10.0, 3: 1000.0}, beta=1.0)
     assert c.recommend({1: 50.0}, 1) == [3]
     assert Content(catalog({1: ["Co-op"], 2: ["Co-op", "PvE"], 3: ["Co-op", "PvE"]})).recommend({1: 50.0}, 1) == [2]
+
+
+def test_ease_survives_a_save_and_load(tmp_path):
+    from recs.ease import EASE
+    e = EASE(two_groups(), lam=1.0, fallback=[3, 1])
+    e.save(tmp_path / "ease")
+    back = EASE.load(tmp_path / "ease", fallback=[3, 1])
+    assert back.recommend({1: 10.0}, 1) == [2] and back.recommend({999: 1.0}, 2) == [3, 1]

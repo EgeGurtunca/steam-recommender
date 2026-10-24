@@ -149,6 +149,27 @@ The training data ends in 2022, so I looked for something newer:
   Valve switched off the store's review endpoint on 22 October 2026, mid-project; the collector uses its Web
   API replacement, `IUserReviewsService/GetAppReviews`.
 
+## Your own profile
+
+```bash
+python -m recs.profile https://steamcommunity.com/id/<name>
+```
+
+[recs/steam.py](recs/steam.py) reads one library from a profile link, only at that person's request (as the
+Steam Web API terms require), with your own key in `.env`; nothing is stored. [recs/profile.py](recs/profile.py)
+then prints, in about 3 seconds once the EASE weights are cached:
+
+- **your taste**: Steam tags weighted by how rare they are across 130K games and by `sqrt(hours)`. Tags that
+  describe how a game is played (Multiplayer, Free to Play, Singleplayer) are left out of the taste and shown as
+  a separate share: how many of your hours went to multiplayer or co-op games.
+- **play next**: EASE's top 10, with programs filtered out by their Steam genre.
+- **new since 2024**: games the 2022 model never saw, ranked by tag similarity times `log1p(positive reviews)`.
+
+Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
+and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
+`log1p`, which squashed them so hard that a hundred short games outweighed three very long ones; `sqrt` fixed it.
+Playtime is still a rough signal: idle games left running inflate it.
+
 ## Running it
 
 ```bash
@@ -171,14 +192,14 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-47 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+56 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 
-- Read a real Steam profile link (Steam Web API) and put a small page or a Telegram bot in front of it
+- A small local page (with a genre bubble graph) or a Telegram bot in front of `recs.profile`
 - A newer game catalogue for 2023 to 2026 games, and a better answer to cold start than tags
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
