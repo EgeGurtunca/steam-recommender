@@ -165,6 +165,17 @@ then prints, in about 3 seconds once the EASE weights are cached:
 - **play next**: EASE's top 10, with programs filtered out by their Steam genre.
 - **new since 2024**: games the 2022 model never saw, ranked by tag similarity times `log1p(positive reviews)`.
 
+Or as a page, standard library only:
+
+```bash
+python -m recs.web      # http://127.0.0.1:8000
+```
+
+Paste a profile link and it draws the taste as a bubble graph (D3): one bubble per tag, sized by its share,
+linked to the tags that describe the same games across the store (Jaccard over well-reviewed games), so related
+tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
+shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages.
+
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
 and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
 `log1p`, which squashed them so hard that a hundred short games outweighed three very long ones; `sqrt` fixed it.
@@ -192,14 +203,14 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-56 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+58 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 
-- A small local page (with a genre bubble graph) or a Telegram bot in front of `recs.profile`
+- A Telegram bot in front of the same engine, and gemma4's one-line reasons on the page
 - A newer game catalogue for 2023 to 2026 games, and a better answer to cold start than tags
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.

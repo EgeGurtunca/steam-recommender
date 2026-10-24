@@ -42,3 +42,13 @@ def test_format_tags_are_kept_out_of_the_taste_and_reported_as_a_split():
     assert "Singleplayer" not in taste and "Multiplayer" not in taste and "Free to Play" not in taste
     split = profile.social_split({1: 400.0, 2: 100.0, 3: 100.0}, store)
     assert split == {"multiplayer": 100 / 600, "singleplayer": 500 / 600}
+
+
+def test_tag_edges_link_tags_that_share_games():
+    store = {1: {"tags": ["Grand Strategy", "Historical"], "genres": [], "positive": 900},
+             2: {"tags": ["Grand Strategy", "Historical"], "genres": [], "positive": 900},
+             3: {"tags": ["FPS", "Shooter"], "genres": [], "positive": 900},
+             4: {"tags": ["Historical", "FPS"], "genres": [], "positive": 10}}  # too few reviews to count
+    edges = profile.tag_edges(["Grand Strategy", "Historical", "FPS", "Shooter"], store, min_positive=100, min_jaccard=0.3)
+    assert ("Grand Strategy", "Historical", 1.0) in edges and ("FPS", "Shooter", 1.0) in edges
+    assert not any({a, b} == {"Historical", "FPS"} for a, b, _ in edges)

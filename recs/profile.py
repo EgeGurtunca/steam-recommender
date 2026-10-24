@@ -46,6 +46,24 @@ def taste_profile(library: Library, store: dict, top: int = 12, weights: dict | 
     return [(t, v / total) for t, v in vec.most_common(top)]
 
 
+def tag_edges(tags: list[str], store: dict, min_positive: int = 500, min_jaccard: float = 0.08) -> list[tuple[str, str, float]]:
+    """Which of these tags tend to describe the same games (Jaccard over reviewed games), for the bubble graph."""
+    games = {t: set() for t in tags}
+    for app, v in store.items():
+        if v.get("positive", 0) >= min_positive:
+            for t in v["tags"][:TAGS_USED]:
+                if t in games:
+                    games[t].add(app)
+    edges = []
+    for i, a in enumerate(tags):
+        for b in tags[i + 1:]:
+            union = len(games[a] | games[b])
+            j = len(games[a] & games[b]) / union if union else 0.0
+            if j >= min_jaccard:
+                edges.append((a, b, round(j, 3)))
+    return edges
+
+
 def social_split(library: Library, store: dict) -> dict[str, float]:
     """Share of hours in games tagged multiplayer or co-op, against the rest (a proxy for "with friends")."""
     social = sum(h for a, h in library.items() if set((store.get(a) or {}).get("tags", [])[:TAGS_USED]) & SOCIAL)
