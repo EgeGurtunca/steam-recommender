@@ -38,6 +38,9 @@
   .card small { color: var(--muted); }
   .reason { color: #c9d4e0; font-size: 13px; margin: 6px 0 0; font-style: italic; }
   .hidden { display: none; }
+  .sliders { display: flex; gap: 22px; flex-wrap: wrap; margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .sliders label { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; }
+  .sliders input { flex: 1; padding: 0; accent-color: var(--accent); }
   footer { color: var(--muted); font-size: 12px; margin-top: 24px; }
 </style>
 </head>
@@ -57,7 +60,12 @@
       <h2>Your taste <span><button class="ghost on" data-view="all">All time</button> <button class="ghost" data-view="recent">Last 2 weeks</button></span></h2>
       <svg id="graph"></svg>
     </section>
-    <section><h2>Play next <button class="ghost" id="why">Why these? (local LLM, about 30 s)</button></h2><div class="cards" id="next"></div></section>
+    <section><h2>Play next <button class="ghost" id="why">Why these? (local LLM, about 30 s)</button></h2>
+      <div class="sliders">
+        <label>Popular <input type="range" id="pop" min="-1" max="1" step="0.1" value="0"> Niche</label>
+        <label>Older <input type="range" id="age" min="-1" max="1" step="0.1" value="0"> Newer</label>
+      </div>
+      <div class="cards" id="next"></div></section>
     <section><h2>New since 2024 that fit your tags</h2><div class="cards" id="new"></div></section>
   </div>
   <footer>Recommendations: EASE trained on 41M public Steam reviews (to 2022) and an October 2026 store catalogue. Not affiliated with Valve.</footer>
@@ -65,7 +73,7 @@
 <div class="tip" id="tip"></div>
 <script>
 const $ = id => document.getElementById(id);
-let data = null, view = "all", lastWidth = 0;
+let data = null, view = "all", lastWidth = 0, shown = [];
 new ResizeObserver(() => {
   const w = $("graph").getBoundingClientRect().width;
   if (data && w && Math.abs(w - lastWidth) > 40) drawGraph();
@@ -74,7 +82,8 @@ new ResizeObserver(() => {
 $("why").addEventListener("click", async () => {
   const btn = $("why"); btn.disabled = true; btn.textContent = "gemma4 is reading your library...";
   try {
-    const r = await fetch("/api/reasons?link=" + encodeURIComponent($("link").value.trim()));
+    const apps = shown.map(g => g.app_id).join(",");
+    const r = await fetch("/api/reasons?link=" + encodeURIComponent($("link").value.trim()) + "&apps=" + apps);
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || "Something went wrong");
     body.forEach(({ app_id, reason }) => {
@@ -97,7 +106,6 @@ $("form").addEventListener("submit", async e => {
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || "Something went wrong");
     data = body; $("status").textContent = ""; render();
-    $("why").disabled = false; $("why").textContent = "Why these? (local LLM, about 30 s)";
   } catch (err) { $("status").className = "err"; $("status").textContent = err.message; }
 });
 
@@ -123,8 +131,24 @@ function render() {
     stat(data.games, "games owned"), stat(data.played, "played 2 hours or more"),
     stat(data.hours.toLocaleString(), "hours in total"),
     stat(multi + "%", "of hours in multiplayer or co-op", bar));
-  cards("next", data.next); cards("new", data.new); drawGraph();
+  playNext(); cards("new", data.new); drawGraph();
 }
+
+// Steam's interactive recommender has the same two sliders. EASE's order is the base score; each slider adds
+// the game's percentile among the 60 candidates (review count, release year), so at 0 and 0 it is EASE's top 10.
+function playNext() {
+  const c = data.next, n = c.length, pct = key => {
+    const order = c.map((g, i) => i).sort((a, b) => key(c[a]) - key(c[b])), p = [];
+    order.forEach((i, rank) => p[i] = n > 1 ? rank / (n - 1) - 0.5 : 0); return p;
+  };
+  const pop = pct(g => g.positive), age = pct(g => +g.year || 0);
+  const niche = +$("pop").value, newer = +$("age").value;
+  shown = c.map((g, i) => ({ g, s: 1 - i / n - niche * pop[i] + newer * age[i] }))
+           .sort((a, b) => b.s - a.s).slice(0, 10).map(x => x.g);
+  cards("next", shown);
+  $("why").disabled = false; $("why").textContent = "Why these? (local LLM, about 30 s)";
+}
+["pop", "age"].forEach(id => $(id).addEventListener("input", () => data && playNext()));
 
 function cards(id, games) {
   $(id).replaceChildren(...games.map(g => {
@@ -134,6 +158,7 @@ function cards(id, games) {
     const d = document.createElement("div");
     const b = document.createElement("b"); b.textContent = g.title;
     const s = document.createElement("small"); s.textContent = [g.year, g.tags.join(", ")].filter(Boolean).join(" · ");
+    if (g.positive) s.title = g.positive.toLocaleString() + " positive reviews";
     d.append(b, s); a.append(img, d); return a;
   }));
 }

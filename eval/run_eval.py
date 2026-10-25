@@ -54,6 +54,12 @@ class Systems:
             return Content(self.catalog, fallback=self.popularity.ranking)
         if name == "als":
             return ALS(self.train, fallback=self.popularity.ranking)
+        if name.startswith("ease-w:"):  # "ease-w:<mode>": rows weighted by recs.profile.engagement
+            from recs.profile import engagement
+            store, mode = load_store(), name.split(":")[1]
+            e = EASE.__new__(EASE)
+            e.__dict__ = dict(self.get("ease").__dict__, name=name, weigh=lambda lib: engagement(lib, store, mode))
+            return e
         if name.startswith("ease"):  # "ease" or "ease:<lam>" for tuning on val
             lam = float(name.split(":")[1]) if ":" in name else 500.0
             return EASE(self.train, lam=lam, fallback=self.popularity.ranking)

@@ -52,3 +52,9 @@ def test_tag_edges_link_tags_that_share_games():
     edges = profile.tag_edges(["Grand Strategy", "Historical", "FPS", "Shooter"], store, min_positive=100, min_jaccard=0.3)
     assert ("Grand Strategy", "Historical", 1.0) in edges and ("FPS", "Shooter", 1.0) in edges
     assert not any({a, b} == {"Historical", "FPS"} for a, b, _ in edges)
+
+
+def test_engagement_compares_hours_to_the_games_median():
+    store = {1: {"median_hours": 40.0}, 2: {"median_hours": 0}}
+    w = profile.engagement({1: 400.0, 2: 9.0, 3: 5.0}, store, mode="rel-sqrt")
+    assert w == {1: 10 ** 0.5}  # 10x the median; no median or not in the store: left to the default weight

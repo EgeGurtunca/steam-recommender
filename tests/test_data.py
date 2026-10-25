@@ -91,7 +91,7 @@ STORE_HEADER = ("AppID,Name,Release date,Estimated owners,Peak CCU,Required age,
 def store_row(app, name, date, positive, negative, tags):
     # 40 values for 39 header names: the real file's header merges "Discount" and "DLC count"
     vals = [app, name, date, "0 - 20000", 5, 0, 9.99, 0, 0, "about", "[]", "[]", "", "", "", "", "", "True", "False",
-            "False", 0, "", 0, positive, negative, "", 0, 0, "", 0, 0, 0, 0, "dev", "pub", "Co-op", "Action", tags, "", ""]
+            "False", 0, "", 0, positive, negative, "", 0, 0, "", 0, 0, 2264, 0, "dev", "pub", "Co-op", "Action", tags, "", ""]
     return ",".join(f'"{v}"' if isinstance(v, str) else str(v) for v in vals)
 
 
@@ -105,7 +105,8 @@ def test_store_catalog_splits_the_merged_header(tmp_path):
     assert stats == {"apps": 1}
     store = data.load_store(tmp_path / "build")
     assert store[553850] == {"title": "HELLDIVERS 2", "released": "2024-02-08", "positive": 775883, "negative": 241752,
-                             "tags": ["Online Co-Op", "PvE", "Shooter"], "genres": ["Action"]}
+                             "tags": ["Online Co-Op", "PvE", "Shooter"], "genres": ["Action"],
+                             "median_hours": 2264 / 60}
 
 
 def test_store_catalog_refuses_a_header_it_does_not_recognise(tmp_path):

@@ -38,6 +38,19 @@ def tag_vector(library: Library, store: dict, weights: dict[str, float]) -> Coun
     return vec
 
 
+def engagement(library: Library, store: dict, mode: str = "rel-log") -> dict[int, float]:
+    """How much more than a typical owner this player played each game: 1000 hours of a game whose median is
+    40 says more than 1000 hours of an idle game whose median is 80. Games without a median count 1."""
+    out = {}
+    for app, hours in library.items():
+        median = (store.get(app) or {}).get("median_hours", 0)
+        if mode == "sqrt-hours":
+            out[app] = math.sqrt(hours)
+        elif median > 0:
+            out[app] = math.log1p(hours / median) if mode == "rel-log" else math.sqrt(hours / median)
+    return out
+
+
 def taste_profile(library: Library, store: dict, top: int = 12, weights: dict | None = None) -> list[tuple[str, float]]:
     vec = tag_vector(library, store, weights or idf(store))
     for t in FORMAT:

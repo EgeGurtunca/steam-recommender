@@ -139,7 +139,7 @@ third decimal._
 
 The training data ends in 2022, so I looked for something newer:
 
-- **A store catalogue from October 2026** (Kaggle, 130K apps). Its header merges "Discount" and "DLC count"
+- **A store catalogue from October 2026** ([130K Steam Games](https://www.kaggle.com/datasets/sibamsamanta07/130k-steam-games-prices-tags-reviews-ccu) on Kaggle, the same columns as the [FronkonGames Steam Games Dataset](https://www.kaggle.com/datasets/fronkongames/steam-games-dataset) it appears to be built from). Its header merges "Discount" and "DLC count"
   into one name while every row has both values, so every later column reads one off (Positive shows 0 and
   Tags holds the genres). [recs/data.py](recs/data.py) splits the header and refuses any header or row width
   it does not expect.
@@ -176,7 +176,11 @@ python -m recs.web      # http://127.0.0.1:8000
 Paste a profile link and it draws the taste as a bubble graph (D3): one bubble per tag, sized by its share,
 linked to the tags that describe the same games across the store (Jaccard over well-reviewed games), so related
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
-shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages. A button
+shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages. Two sliders, popular to niche and
+older to newer, borrowed from Steam's own interactive recommender, re-sort EASE's top 60 in the page: each adds
+the game's percentile among those 60 (review count, release year) to EASE's order, so at the middle it is plain
+EASE. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,
+not obscure. A button
 asks gemma4 for one line per "play next" card, from the games you played (schema-limited to those ten, in
 EASE's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
 still reads correctly. Ollama is started for that request and stopped right after.
@@ -185,6 +189,15 @@ Trying it on my own library found two problems the offline eval could not: a wal
 and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
 `log1p`, which squashed them so hard that a hundred short games outweighed three very long ones; `sqrt` fixed it.
 Playtime is still a rough signal: idle games left running inflate it.
+
+I then tried what Steam's own recommender is described as using, playtime: weight each liked game in EASE's
+sum by how long it was played, either `sqrt(hours)` or hours against the game's median playtime from the store
+catalogue (`python -m eval.run_eval --systems ease,ease-w:sqrt-hours,ease-w:rel-sqrt,ease-w:rel-log`). On val
+every variant came out slightly worse than plain EASE (recall@10 0.166 to 0.168 against 0.172), and on my
+library the median version made things worse in a way I had not expected: idle games have tiny medians
+(most owners open them once), so 2,300 hours of one is 209 times its median, the strongest signal in the
+library. EASE learned from liked or not; at least for it, "how much" adds noise rather than taste. Kept as an
+eval option, not used by the page.
 
 ## Running it
 
@@ -208,7 +221,7 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-60 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+62 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.

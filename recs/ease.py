@@ -38,12 +38,22 @@ class EASE:
         e.index = {int(a): i for i, a in enumerate(e.item_ids)}
         return e
 
-    def ranking(self, library: Library, n: int) -> list[int]:
-        cols = [self.index[a] for a in library if a in self.index]
-        if not cols:
-            return []
-        scores = self.b[cols].sum(axis=0)
+    def scores(self, library: Library) -> np.ndarray | None:
+        """A score for every game (columns in item_ids order), owned ones -inf; None if no game is known."""
+        apps = [a for a in library if a in self.index]
+        if not apps:
+            return None
+        cols = [self.index[a] for a in apps]
+        weigh = getattr(self, "weigh", None)  # None: every liked game counts once, as in training
+        w = weigh(library) if weigh else {}
+        scores = np.asarray([w.get(a, 1.0) for a in apps], dtype=np.float32) @ self.b[cols]
         scores[cols] = -np.inf
+        return scores
+
+    def ranking(self, library: Library, n: int) -> list[int]:
+        scores = self.scores(library)
+        if scores is None:
+            return []
         top = np.argpartition(-scores, n)[:n]
         return [int(self.item_ids[i]) for i in top[np.argsort(-scores[top], kind="stable")]]
 

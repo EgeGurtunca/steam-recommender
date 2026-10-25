@@ -155,12 +155,12 @@ def build_store(zip_path: Path, build_dir: Path = BUILD_DIR) -> dict[str, int]:
                 released = None  # "Coming soon", "Q1 2027" and the like
             out.append((int(r[col["AppID"]]), r[col["Name"]], released, int(r[col["Positive"]] or 0),
                         int(r[col["Negative"]] or 0), [t for t in r[col["Tags"]].split(",") if t],
-                        [g for g in r[col["Genres"]].split(",") if g]))
+                        [g for g in r[col["Genres"]].split(",") if g], int(r[col["Median playtime forever"]] or 0)))
     build_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     con.execute("create table store (app_id bigint, title varchar, released date, positive bigint, negative bigint, "
-                "tags varchar[], genres varchar[])")
-    con.executemany("insert into store values (?, ?, ?, ?, ?, ?, ?)", out)
+                "tags varchar[], genres varchar[], median_minutes bigint)")  # median 0 = SteamSpy has no number
+    con.executemany("insert into store values (?, ?, ?, ?, ?, ?, ?, ?)", out)
     con.execute(f"copy store to '{build_dir.as_posix()}/store.parquet' (format parquet)")
     return {"apps": len(out)}
 
@@ -168,7 +168,7 @@ def build_store(zip_path: Path, build_dir: Path = BUILD_DIR) -> dict[str, int]:
 def load_store(build_dir: Path = BUILD_DIR) -> dict[int, dict]:
     rows = duckdb.execute(f"select * from '{build_dir.as_posix()}/store.parquet'").fetchall()
     return {a: {"title": t, "released": str(d) if d else None, "positive": p, "negative": n, "tags": list(g),
-                "genres": list(ge)} for a, t, d, p, n, g, ge in rows}
+                "genres": list(ge), "median_hours": m / 60} for a, t, d, p, n, g, ge, m in rows}
 
 
 if __name__ == "__main__":

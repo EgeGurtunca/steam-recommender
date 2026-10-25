@@ -32,3 +32,13 @@ def test_reasons_follow_the_page_order_and_use_store_titles_for_new_games():
     out = web.reasons(lib, store, FakeRanker(), Catalog({1: "A", 2: "B", 3: "Tool"}, {1: ["Strategy"]}, {}), generate=fake)
     assert out == [{"app_id": 2, "reason": "You liked A and Brand New"}]
     assert "Brand New" in prompts[0]  # a 2025 game the 2022 catalogue does not know still has a name in the prompt
+
+
+def test_reasons_explain_the_cards_the_sliders_left_on_the_page():
+    lib = SteamLibrary("765", {1: 50.0}, titles={1: "A"})
+    asked = []
+    def fake(prompt, schema):
+        asked.append(schema["properties"]["reasons"]["items"]["properties"]["app_id"]["enum"])
+        return {"reasons": []}
+    web.reasons(lib, STORE, FakeRanker(), Catalog({1: "A", 2: "B"}, {}, {}), generate=fake, apps=[2, 1, 99, 2])
+    assert asked == [[2]]  # owned (1), unknown (99) and repeats dropped
