@@ -2,14 +2,23 @@
 
 ![tests](https://github.com/EgeGurtunca/steam-recommender/actions/workflows/test.yml/badge.svg)
 
-Give it a Steam library (games and hours played) and it recommends ten games you don't own. I built four
-recommenders on 41 million Steam reviews, from "most popular" to a trained matrix factorisation model to a local
-LLM reranking the candidates, and measured all of them the same way on users they had never seen.
+Give it a Steam library (games and hours played) and it recommends ten games you don't own. I built
+recommenders on 41 million Steam reviews, from "most popular" to matrix factorisation, a local LLM reranking the
+candidates and a small transformer reading a library in order, and measured all of them the same way on users
+they had never seen.
 
 The short version: the trained models win (EASE best), and the LLM did not make the ranking better while
 taking 5,000 times longer. Asked to predict what players liked next year instead of a random part of their
 library, every system finds less than half as much, and the models that read a library in order win there.
 Below is how much, how sure, and why that is still useful to know.
+
+| question | answer (recall@10 on held-out test users, 95% interval on the gap) |
+|---|---|
+| Which model finds the 20% of a library hidden from it? | EASE 0.172, ALS 0.143, popularity 0.048 (EASE over ALS: +0.017 to +0.042) |
+| Does a local LLM reranking ALS help? | No: 0.149 against 0.160 (-0.038 to +0.015), 5,000 times slower |
+| Which predicts what a player likes next year? | EASE + SASRec 0.088, EASE 0.064 (+0.015 to +0.033); every number less than half the random split's |
+| How much data does a new game need? | A week of reviews: 0.052, three times its tags (0.016) |
+| Do co-likes beat tags for 2025 releases? | Not with reviews collected game by game: 0.077 against 0.085 (-0.035 to +0.016) |
 
 ![The local page on the made-up demo library: taste as a bubble graph, then EASE + SASRec picks with the popular/niche and older/newer sliders](docs/page.png)
 
@@ -33,10 +42,11 @@ The raw files are not in this repo.
   pass can starve the other
 - result: **1,495,210 users, 10,816 games, 15.8M positives**, built in about 15 seconds
 
-## The four recommenders
+## The recommenders
 
-All of them implement one function, `recommend(library, k) -> list of app ids`, so the eval (and later a web
-page or a bot) can call any of them.
+All of them implement one function, `recommend(library, k) -> list of app ids`, so the eval and the page can
+call any of them. The first five are scored on the random split below; the last two read a library in order,
+which only the time split can judge.
 
 1. **Popularity** ([recs/popularity.py](recs/popularity.py)): the games most training users liked. The floor.
 2. **Content** ([recs/content.py](recs/content.py)): TF-IDF over the games' Steam tags, a profile weighted by
@@ -51,6 +61,10 @@ page or a bot) can call any of them.
    `gemma4:12b` running locally, with one sentence per pick on why. The answer goes through Ollama's structured
    outputs with a JSON schema whose only allowed ids are the candidates, so it **cannot** recommend a game that
    doesn't exist or isn't in the list.
+6. **Transitions** ([recs/sequence.py](recs/sequence.py)): over likes in date order, how often each game was
+   followed by each other one; a user's latest games say most. It nudges EASE's candidates.
+7. **SASRec** ([eval/sasrec.py](eval/sasrec.py), [recs/sasrec_np.py](recs/sasrec_np.py)): a two-layer causal
+   transformer over the last 50 likes, trained in PyTorch on a GPU and run in numpy on the page.
 
 ## Evaluation
 
