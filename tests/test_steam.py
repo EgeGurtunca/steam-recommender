@@ -16,7 +16,8 @@ def test_library_from_a_vanity_link():
     answers = {
         "ResolveVanityURL": {"response": {"success": 1, "steamid": "76561198000000001"}},
         "GetOwnedGames": {"response": {"game_count": 2, "games": [
-            {"appid": 553850, "name": "HELLDIVERS 2", "playtime_forever": 6000, "playtime_2weeks": 120},
+            {"appid": 553850, "name": "HELLDIVERS 2", "playtime_forever": 6000, "playtime_2weeks": 120,
+             "rtime_last_played": 1761300000},
             {"appid": 620, "name": "Portal 2", "playtime_forever": 0}]}},
     }
     get = lambda url: next(v for k, v in answers.items() if k in url)
@@ -24,6 +25,7 @@ def test_library_from_a_vanity_link():
     assert lib.games == {553850: 100.0, 620: 0.0}
     assert lib.recent == {553850: 2.0}
     assert lib.titles[620] == "Portal 2"
+    assert lib.last_played == {553850: 1761300000}  # never played: no entry
 
 
 def test_private_library_is_a_clear_error():

@@ -42,3 +42,25 @@ def test_reasons_explain_the_cards_the_sliders_left_on_the_page():
         return {"reasons": []}
     web.reasons(lib, STORE, FakeRanker(), Catalog({1: "A", 2: "B"}, {}, {}), generate=fake, apps=[2, 1, 99, 2])
     assert asked == [[2]]  # owned (1), unknown (99) and repeats dropped
+
+
+def test_demo_needs_no_steam_key_or_network(monkeypatch):
+    def no_network(link):
+        raise AssertionError("demo must not call Steam")
+    monkeypatch.setattr(web.steam, "load_library", no_network)
+    lib = web.library(" demo ")
+    assert lib.steamid == "demo" and len(lib.games) >= 10 and set(lib.recent) <= set(lib.games)
+
+
+def test_the_ranker_sees_the_latest_played_games_weighing_most():
+    seen = {}
+
+    class Recording(FakeRanker):
+        def ranking(self, library, n):
+            seen.update(library)
+            return super().ranking(library, n)
+
+    day = 86400
+    lib = SteamLibrary("765", {1: 50.0, 2: 30.0, 9: 1.0}, last_played={1: 1000 * day, 2: 820 * day})
+    web.next_picks(lib, STORE, Recording(), now=1000 * day)
+    assert seen[1] == 1.0 and abs(seen[2] - 0.5) < 1e-9 and 9 not in seen  # 180 days older: half; under 2 h: out

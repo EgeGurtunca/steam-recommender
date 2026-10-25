@@ -47,7 +47,7 @@
 <body>
 <main>
   <h1>Steam Taste</h1>
-  <p class="sub">Paste your Steam profile link. Your game details must be public. Nothing is stored.</p>
+  <p class="sub">Paste your Steam profile link. Your game details must be public. Nothing is stored. Or type <code>demo</code> for a made-up library.</p>
   <form id="form">
     <input id="link" placeholder="https://steamcommunity.com/id/yourname" autocomplete="off">
     <button>Show my taste</button>
@@ -129,7 +129,7 @@ function render() {
   const fill = document.createElement("i"); fill.style.width = multi + "%"; bar.append(fill);
   $("stats").replaceChildren(
     stat(data.games, "games owned"), stat(data.played, "played 2 hours or more"),
-    stat(data.hours.toLocaleString(), "hours in total"),
+    stat(data.hours.toLocaleString("en"), "hours in total"),
     stat(multi + "%", "of hours in multiplayer or co-op", bar));
   playNext(); cards("new", data.new); drawGraph();
 }
@@ -158,7 +158,7 @@ function cards(id, games) {
     const d = document.createElement("div");
     const b = document.createElement("b"); b.textContent = g.title;
     const s = document.createElement("small"); s.textContent = [g.year, g.tags.join(", ")].filter(Boolean).join(" · ");
-    if (g.positive) s.title = g.positive.toLocaleString() + " positive reviews";
+    if (g.positive) s.title = g.positive.toLocaleString("en") + " positive reviews";
     d.append(b, s); a.append(img, d); return a;
   }));
 }
@@ -202,6 +202,9 @@ function drawGraph() {
     node.attr("transform", d => `translate(${d.x},${d.y})`);
   });
 }
+
+// /?demo opens straight on the made-up library (for screenshots and a first look)
+if (new URLSearchParams(location.search).has("demo")) { $("link").value = "demo"; $("form").requestSubmit(); }
 </script>
 </body>
 </html>

@@ -8,5 +8,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install duckdb numpy scipy scikit-learn implicit pytest
+      - run: pip install ".[dev]"
       - run: pytest -q

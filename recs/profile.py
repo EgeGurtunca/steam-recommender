@@ -85,9 +85,9 @@ def social_split(library: Library, store: dict) -> dict[str, float]:
 
 
 def new_releases(library: Library, store: dict, since: str = "2024-01-01", k: int = 10, min_positive: int = 2000,
-                 weights: dict | None = None) -> list[int]:
+                 weights: dict | None = None, pop_power: float = 1.0) -> list[int]:
     """Games released from `since`, not owned, with at least `min_positive` positive reviews, ranked by tag
-    similarity to the player times log1p(positive reviews)."""
+    similarity to the player times log1p(positive reviews) ** pop_power."""
     weights = weights or idf(store)
     user = tag_vector(library, store, weights)
     norm_u = math.sqrt(sum(v * v for v in user.values())) or 1.0
@@ -98,7 +98,7 @@ def new_releases(library: Library, store: dict, since: str = "2024-01-01", k: in
         tags = v["tags"][:TAGS_USED]
         norm_c = math.sqrt(sum(weights.get(t, 0) ** 2 for t in tags)) or 1.0
         cos = sum(user.get(t, 0) * weights.get(t, 0) for t in tags) / (norm_u * norm_c)
-        scored.append((cos * math.log1p(v["positive"]), app))
+        scored.append((cos * math.log1p(v["positive"]) ** pop_power, app))
     return [app for _, app in sorted(scored, reverse=True)[:k]]
 
 
@@ -121,10 +121,11 @@ def main(link: str) -> None:
         train = build_interactions(*load_positives(), exclude_users=set())
         ease = EASE(train, lam=500, fallback=Popularity(train).ranking)
         ease.save(cache)
-    picks = [a for a in ease.ranking(played, 60) if a not in lib.games and is_game(a, store)][:10]
+    from recs.web import next_picks, page_ranker
+    _, picks = next_picks(lib, store, page_ranker(ease))  # as the page ranks
     split = social_split(played, store)
     print(f"\nHours in multiplayer or co-op games: {split['multiplayer']:.0%}, the rest: {split['singleplayer']:.0%}")
-    print("\nPlay next (EASE, from 1.5M players up to 2022):")
+    print("\nPlay next (EASE + the order you played in, from 1.5M players up to 2022):")
     for i, a in enumerate(picks, 1):
         print(f"  {i:2}. {catalog.titles.get(a) or store.get(a, {}).get('title', a)}")
     print("\nNew since 2024 that fit your tags (2026 store catalogue):")

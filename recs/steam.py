@@ -23,6 +23,7 @@ class SteamLibrary:
     games: dict[int, float]  # app_id -> total hours
     recent: dict[int, float] = field(default_factory=dict)  # app_id -> hours in the last two weeks
     titles: dict[int, str] = field(default_factory=dict)
+    last_played: dict[int, int] = field(default_factory=dict)  # app_id -> unix time, for games ever played
 
 
 def parse_profile(link: str) -> tuple[str, str]:
@@ -63,4 +64,5 @@ def load_library(link: str, key: str | None = None, get: Callable[[str], dict] =
     games = owned["games"]
     return SteamLibrary(value, {g["appid"]: round(g.get("playtime_forever", 0) / 60, 1) for g in games},
                         {g["appid"]: round(g["playtime_2weeks"] / 60, 1) for g in games if g.get("playtime_2weeks")},
-                        {g["appid"]: g.get("name", "") for g in games})
+                        {g["appid"]: g.get("name", "") for g in games},
+                        {g["appid"]: g["rtime_last_played"] for g in games if g.get("rtime_last_played")})

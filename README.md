@@ -11,6 +11,10 @@ taking 5,000 times longer. Asked to predict what players liked next year instead
 library, every system finds less than half as much, and the models that read a library in order win there.
 Below is how much, how sure, and why that is still useful to know.
 
+![The local page on the made-up demo library: taste as a bubble graph, then EASE + SASRec picks with the popular/niche and older/newer sliders](docs/page.png)
+
+_The local page ([below](#your-own-profile)) on a made-up library: type `demo` in the box, or open `/?demo`._
+
 **Stack:** Python 3.12 · DuckDB (SQL over a 2 GB CSV) · numpy / scipy · implicit (ALS) · scikit-learn (TF-IDF) ·
 Ollama (`gemma4:12b`) · PyTorch (SASRec) · pytest
 
@@ -207,7 +211,10 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   noise (+0.005, -0.004 to +0.015). The best is both: EASE's candidates reordered with SASRec's view finds
   38% more than EASE, and beats SASRec alone too (+0.010, +0.002 to +0.017; retrained, SASRec gave the same
   0.078). On the random split EASE was the clear winner; on the question a deployed system faces, what comes
-  next, the models that read order win, and a set model and an order model together win most.
+  next, the models that read order win, and a set model and an order model together win most. The page uses
+  that pair without torch: [recs/sasrec_np.py](recs/sasrec_np.py) is the same forward pass in numpy, trained
+  once on every positive (`python -m eval.sasrec --page`), and gives torch's top 10 for every checked library
+  (largest score difference 6e-6) in 0.03 s.
 - **ALS is three times better than popularity**, and it recommends 648 different games to 1000 people where
   popularity recommends the same 18 to everyone. Tuning it was cheap: of four settings (64 or 128 factors,
   alpha 1 or 4), 64 factors with alpha 4 found the most hidden games on validation.
@@ -312,7 +319,8 @@ then prints, in about 3 seconds once the EASE weights are cached:
 - **your taste**: Steam tags weighted by how rare they are across 130K games and by `sqrt(hours)`. Tags that
   describe how a game is played (Multiplayer, Free to Play, Singleplayer) are left out of the taste and shown as
   a separate share: how many of your hours went to multiplayer or co-op games.
-- **play next**: EASE's top 10, with programs filtered out by their Steam genre.
+- **play next**: the page's ranking (EASE + SASRec, the latest played games last in the order it reads), with
+  programs filtered out by their Steam genre.
 - **new since 2024**: games the 2022 model never saw, ranked by tag similarity times `log1p(positive reviews)`.
 
 Or as a page, standard library only:
@@ -325,12 +333,16 @@ Paste a profile link and it draws the taste as a bubble graph (D3): one bubble p
 linked to the tags that describe the same games across the store (Jaccard over well-reviewed games), so related
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
 shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages. Two sliders, popular to niche and
-older to newer, borrowed from Steam's own interactive recommender, re-sort EASE's top 60 in the page: each adds
-the game's percentile among those 60 (review count, release year) to EASE's order, so at the middle it is plain
-EASE. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,
-not obscure. A button
+older to newer, borrowed from Steam's own interactive recommender, re-sort the ranker's top 60 in the page: each
+adds the game's percentile among those 60 (review count, release year) to the ranker's order, so at the middle
+the order is untouched. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,
+not obscure. The candidates are EASE nudged by SASRec, the pair that did best on the time split's test, reading the
+library in the order Steam's API gives as each game's last-played time (EASE + transitions if the SASRec weights
+are not there). On the demo library a recent run of Slay the Spire brings Inscryption, Vampire Survivors and
+ULTRAKILL into the top ten; with transitions alone the nudge also lifted the games that were rising in 2021 and
+2022 (Bloons TD 6, Among Us), which SASRec does not. A button
 asks gemma4 for one line per "play next" card, from the games you played (schema-limited to those ten, in
-EASE's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
+the page's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
 still reads correctly. Ollama is started for that request and stopped right after.
 
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
@@ -372,10 +384,10 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-73 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+75 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen splits (random and in time), the metrics and their bootstrap intervals, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 

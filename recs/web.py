@@ -4,16 +4,24 @@ Run: python -m recs.web    then open http://127.0.0.1:8000
 Standard library only (http.server); the page itself is static/index.html. Binds to 127.0.0.1, not the network.
 """
 import json
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from recs import profile, steam
-from recs.data import ROOT, Catalog
+from recs import profile, sequence, steam
+from recs.data import BUILD_DIR, ROOT, Catalog
 
 PAGE = ROOT / "static" / "index.html"
 HEADER = "https://cdn.cloudflare.steamstatic.com/steam/apps/{app}/header.jpg"
 TASTE_TAGS = 16
 CANDIDATES = 60  # EASE's top 60 go to the page, which re-sorts them with the popular/niche and older/newer sliders
+# "demo" in the link box: a made-up library, so the page can be tried (and shown) without a Steam key or anyone's profile
+DEMO = steam.SteamLibrary("demo", {620: 40.0, 105600: 310.0, 413150: 120.0, 367520: 65.0, 292030: 140.0, 489830: 90.0,
+                                   1145360: 55.0, 504230: 25.0, 646570: 180.0, 588650: 45.0, 427520: 260.0,
+                                   294100: 200.0, 264710: 50.0, 374320: 70.0, 1245620: 110.0, 1086940: 150.0},
+                          recent={1086940: 12.0, 646570: 4.0},
+                          # played lately: Baldur's Gate 3 and Slay the Spire, then Elden Ring; the rest years ago
+                          last_played={1086940: 1761000000, 646570: 1760900000, 1245620: 1745000000})
 
 
 def card(app: int, store: dict, catalog: Catalog) -> dict:
@@ -41,9 +49,19 @@ def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weig
             "next": [card(a, store, catalog) for a in picks], "new": [card(a, store, catalog) for a in new]}
 
 
-def next_picks(lib: steam.SteamLibrary, store: dict, ranker, k: int = 10) -> tuple[dict, list[int]]:
+def recency(lib: steam.SteamLibrary, played: dict, now: float | None = None) -> dict[int, float]:
+    """Each played game weighted by how long ago it was last played, half per sequence.HALF_LIFE days: the order
+    the ranker's transitions read. A game Steam has no time for counts as the oldest one; no times at all: all 1."""
+    now = now or time.time()
+    w = {a: 0.5 ** ((now - lib.last_played[a]) / 86400 / sequence.HALF_LIFE) for a in played if a in lib.last_played}
+    oldest = min(w.values(), default=1.0)
+    return {a: w.get(a, oldest) for a in played}
+
+
+def next_picks(lib: steam.SteamLibrary, store: dict, ranker, k: int = 10, now: float | None = None) -> tuple[dict, list[int]]:
     played = {a: h for a, h in lib.games.items() if h >= 2}
-    return played, [a for a in ranker.ranking(played, k + 50) if a not in lib.games and profile.is_game(a, store)][:k]
+    picks = ranker.ranking(recency(lib, played, now), k + 50)
+    return played, [a for a in picks if a not in lib.games and profile.is_game(a, store)][:k]
 
 
 def reasons(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, generate=None,
@@ -66,6 +84,10 @@ def reasons(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, gene
     return [{"app_id": a, "reason": r} for a, r in e.explain(played, len(picks)) if r]
 
 
+def library(link: str) -> steam.SteamLibrary:
+    return DEMO if link.strip() == "demo" else steam.load_library(link)
+
+
 class Handler(BaseHTTPRequestHandler):
     state: dict = {}
 
@@ -86,14 +108,14 @@ class Handler(BaseHTTPRequestHandler):
         link = query.get("link", [""])[0]
         try:
             apps = [int(a) for a in query.get("apps", [""])[0].split(",") if a]
-            lib = steam.load_library(link)
+            lib = library(link)
             st = self.state
             if url.path == "/api/reasons":
                 from recs import llm
                 with llm.ollama():  # started for this request and stopped (with its children) right after
-                    body = reasons(lib, st["store"], st["ease"], st["catalog"], apps=apps)
+                    body = reasons(lib, st["store"], st["ranker"], st["catalog"], apps=apps)
             else:
-                body = payload(lib, st["store"], st["ease"], st["catalog"], st["weights"])
+                body = payload(lib, st["store"], st["ranker"], st["catalog"], st["weights"])
             return self.send(200, json.dumps(body).encode(), "application/json")
         except (ValueError, steam.PrivateLibrary) as e:
             return self.send(400, json.dumps({"error": str(e)}).encode(), "application/json")
@@ -102,12 +124,25 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def page_ranker(ease):
+    """EASE + SASRec (numpy) if eval/sasrec.py --page has trained it, else EASE + transitions: the two order-aware
+    rankers that beat EASE on the time split's test (38% and 14% more)."""
+    if (BUILD_DIR / "sasrec_page.npz").exists():
+        from recs.sasrec_np import SASRec, SasrecNudge
+        print("ranking with EASE + SASRec (numpy)")
+        return SasrecNudge(ease, SASRec(BUILD_DIR / "sasrec_page.npz"))
+    print("ranking with EASE + transitions (counted from the raw reviews the first time)")
+    markov = sequence.Markov(sequence.load_transitions(ease.index, BUILD_DIR / "transitions.npz"), ease.item_ids,
+                             ease.index)
+    return sequence.MarkovNudge(ease, markov, sequence.GAMMA)
+
+
 def main(port: int = 8000) -> None:
     from recs.data import BUILD_DIR, load_catalog, load_store
     from recs.ease import EASE
     print("loading the store catalogue and the EASE weights...")
     store = load_store()
-    Handler.state = {"store": store, "catalog": load_catalog(), "ease": EASE.load(BUILD_DIR / "ease"),
+    Handler.state = {"store": store, "catalog": load_catalog(), "ranker": page_ranker(EASE.load(BUILD_DIR / "ease")),
                      "weights": profile.idf(store)}
     print(f"open http://127.0.0.1:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
