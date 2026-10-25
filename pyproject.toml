@@ -7,6 +7,7 @@ dependencies = ["duckdb", "numpy", "scipy", "scikit-learn", "implicit"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+seq = ["torch"]  # only eval/sasrec.py, and only its training step
 
 [tool.setuptools]
 packages = ["recs"]

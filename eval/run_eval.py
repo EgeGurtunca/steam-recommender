@@ -62,7 +62,9 @@ class Systems:
             return e
         if name.startswith("ease"):  # "ease" or "ease:<lam>" for tuning on val
             lam = float(name.split(":")[1]) if ":" in name else 500.0
-            return EASE(self.train, lam=lam, fallback=self.popularity.ranking)
+            e = EASE(self.train, lam=lam, fallback=self.popularity.ranking)
+            e.name = name  # "ease:150" and "ease:1500" stay apart in the results
+            return e
         if name == "hybrid":
             return Hybrid(self.get("als"), self.get("content"), fallback=self.popularity.ranking)
         if name == "rerank":

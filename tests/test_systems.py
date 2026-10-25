@@ -141,3 +141,25 @@ def test_ranker_reorders_ease_candidates_by_what_it_learned():
     assert apps == [1, 2, 3] and x.shape == (3, len(FEATURES))
     r = Ranker(f).fit([{"visible": {4: 5.0}, "hidden": [3]}, {"visible": {5: 5.0}, "hidden": [3]}] * 20)
     assert r.recommend({4: 5.0}, 1) == [3]
+
+
+def test_ease_can_weigh_likes_by_the_matrix_values():
+    from scipy.sparse import csr_matrix
+    from recs.data import Interactions
+    from recs.ease import EASE
+    # users 0-1 liked games 1 and 2 long ago (weight 0.1), users 2-3 liked games 1 and 3 recently (weight 1)
+    m = csr_matrix(np.array([[0.1, 0.1, 0], [0.1, 0.1, 0], [1, 0, 1], [1, 0, 1]], dtype=np.float32))
+    train = Interactions(m, np.array([1, 2, 3]), {1: 0, 2: 1, 3: 2})
+    assert EASE(train, lam=0.1, binary=False).recommend({1: 5.0}, 1) == [3]  # recent co-likes win
+    assert EASE(train, lam=0.1).scores({1: 5.0})[1] == EASE(train, lam=0.1).scores({1: 5.0})[2]  # binary: a tie
+
+
+def test_recent_nudge_moves_up_what_was_liked_lately():
+    from eval.time_split import RecentNudge
+
+    class FakeEase:
+        def ranking(self, library, n):
+            return [1, 2, 3][:n]
+
+    assert RecentNudge(FakeEase(), {3: 1000}, beta=0.0).recommend({}, 3) == [1, 2, 3]
+    assert RecentNudge(FakeEase(), {3: 1000}, beta=2.0).recommend({}, 3) == [3, 1, 2]

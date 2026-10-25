@@ -112,6 +112,21 @@ def load_positives(build_dir: Path = BUILD_DIR) -> tuple[np.ndarray, np.ndarray,
     return cols["user_id"], cols["app_id"], cols["hours"]
 
 
+def load_positive_dates(build_dir: Path = BUILD_DIR) -> tuple[np.ndarray, ...]:
+    """(users, apps, hours, dates) for every positive, the date being the first review that made it one (cached)."""
+    path = build_dir / "positive_dates.parquet"
+    if not path.exists():
+        con = connect()
+        con.execute(f"""copy (
+            select p.user_id, p.app_id, p.hours, r.date
+            from '{(build_dir / "positives.parquet").as_posix()}' p
+            join (select user_id, app_id, min(date) as date from recommendations
+                  where is_recommended and hours >= 2 group by user_id, app_id) r using (user_id, app_id)
+            order by user_id, app_id) to '{path.as_posix()}' (format parquet)""")
+    cols = duckdb.execute(f"select * from '{path.as_posix()}' order by user_id, app_id").fetchnumpy()
+    return cols["user_id"], cols["app_id"], cols["hours"], cols["date"].astype("datetime64[D]")
+
+
 @dataclass
 class Interactions:
     matrix: csr_matrix  # users x items, hours as values

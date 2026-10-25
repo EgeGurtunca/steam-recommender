@@ -13,9 +13,10 @@ from recs.data import Interactions
 class EASE:
     name = "ease"
 
-    def __init__(self, train: Interactions, lam: float = 500.0, fallback: Sequence[int] = ()):
+    def __init__(self, train: Interactions, lam: float = 500.0, fallback: Sequence[int] = (), binary: bool = True):
+        """binary=False learns from the matrix values as weights (eval/time_split.py: recent likes weigh more)."""
         self.item_ids, self.index, self.fallback = train.item_ids, train.item_index, fallback
-        x = (train.matrix > 0).astype(np.float32)
+        x = (train.matrix > 0).astype(np.float32) if binary else train.matrix.astype(np.float32)
         gram = (x.T @ x).toarray().astype(np.float64)
         gram[np.diag_indices_from(gram)] += lam
         with threadpool_limits(None, "blas"):  # the package pins BLAS to 1 thread for implicit; the inverse wants all

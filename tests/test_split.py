@@ -53,3 +53,45 @@ def test_saved_split_loads_back_with_int_keys(tmp_path):
     s = split.make_split(users, apps, hours, n_val=2, n_test=2)
     split.save_split(s, tmp_path / "split.json")
     assert split.load_split(tmp_path / "split.json") == s
+
+
+def test_time_split_shows_the_past_and_hides_the_future():
+    from eval.time_split import make_time_split
+    users = np.array([1] * 6 + [2] * 6 + [3] * 3)
+    apps = np.array([10, 11, 12, 13, 14, 15] * 2 + [10, 11, 12])
+    hours = np.ones(15)
+    old, new = np.datetime64("2021-06-01"), np.datetime64("2022-03-01")
+    dates = np.array([old] * 4 + [new] * 2 + [old] * 6 + [old, new, new])
+    split = make_time_split(users, apps, hours, dates, cutoff="2022-01-01", n_val=1, n_test=0, min_before=3, min_after=2)
+    # user 2 has nothing after the cutoff, user 3 too little before it: only user 1 qualifies
+    assert split["val"] == [{"user": 1, "visible": {10: 1.0, 11: 1.0, 12: 1.0, 13: 1.0}, "hidden": [14, 15]}]
+
+
+def test_by_recency_weighs_each_visible_game_by_when_the_user_liked_it():
+    from eval.time_split import by_recency
+    entries = [{"user": 1, "visible": {10: 50.0, 11: 3.0}, "hidden": [12]}]
+    liked_on = {(1, 10): np.datetime64("2021-12-31"), (1, 11): np.datetime64("2020-01-01")}
+    out = by_recency(entries, liked_on, half_life=730.0, cutoff="2022-01-01")
+    assert out[0]["hidden"] == [12] and entries[0]["visible"][10] == 50.0  # the original is untouched
+    assert abs(out[0]["visible"][10] - 0.5 ** (1 / 730)) < 1e-9 and abs(out[0]["visible"][11] - 0.5) < 0.01
+
+
+def test_transitions_count_what_each_user_liked_next():
+    from recs.sequence import transitions
+    users = np.array([1, 1, 1, 2, 2])
+    apps = np.array([10, 11, 12, 10, 12])
+    dates = np.array(["2020-01-01", "2020-02-01", "2020-03-01", "2020-01-01", "2020-05-01"], dtype="datetime64[D]")
+    index = {10: 0, 11: 1, 12: 2}
+    t = transitions(users, apps, dates, index, window=1).toarray()
+    # user 1: 10 -> 11 -> 12, user 2: 10 -> 12; rows are normalised to sum to 1
+    assert t[0].tolist() == [0, 0.5, 0.5] and t[1].tolist() == [0, 0, 1] and t[2].sum() == 0
+
+
+def test_a_stale_transition_cache_is_counted_again(tmp_path, monkeypatch):
+    from scipy.sparse import csr_matrix, save_npz
+    from recs import data, sequence
+    save_npz(tmp_path / "t.npz", csr_matrix((2, 2), dtype=np.float32))  # built for two games
+    dates = np.array(["2020-01-01", "2020-02-01"], dtype="datetime64[D]")
+    monkeypatch.setattr(data, "load_positive_dates", lambda: (np.array([1, 1]), np.array([10, 11]), None, dates))
+    t = sequence.load_transitions({10: 0, 11: 1, 12: 2}, tmp_path / "t.npz")
+    assert t.shape == (3, 3) and t[0, 1] == 1.0

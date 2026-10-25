@@ -7,10 +7,12 @@ recommenders on 41 million Steam reviews, from "most popular" to a trained matri
 LLM reranking the candidates, and measured all of them the same way on users they had never seen.
 
 The short version: the trained models win (EASE best), and the LLM did not make the ranking better while
-taking 5,000 times longer. Below is how much, how sure, and why that is still useful to know.
+taking 5,000 times longer. Asked to predict what players liked next year instead of a random part of their
+library, every system finds less than half as much, and the models that read a library in order win there.
+Below is how much, how sure, and why that is still useful to know.
 
 **Stack:** Python 3.12 · DuckDB (SQL over a 2 GB CSV) · numpy / scipy · implicit (ALS) · scikit-learn (TF-IDF) ·
-Ollama (`gemma4:12b`) · pytest
+Ollama (`gemma4:12b`) · PyTorch (SASRec) · pytest
 
 ## Data
 
@@ -129,6 +131,83 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   ALS squeezes a big library into 64 numbers and loses detail; EASE adds up one row per game, so every game
   keeps its say. With a small library the two are close. Every eval user liked at least 10 games, so a library
   of three, which the page does get, is not measured here.
+- **Asked to predict the future, every number falls by more than half.** The split above hides a random 20% of
+  each library, so a game liked in 2022 can help find one liked in 2015, and the other users' later reviews are
+  in training too. A deployed recommender has neither. So I froze a second split
+  ([eval/time_split.py](eval/time_split.py), [eval/time_split.json](eval/time_split.json)): everything trains
+  on positives from before 1 January 2022, and each of 1000 val and 1000 test users (8 or more liked games before,
+  2 or more after) is shown their past and asked for what they liked in 2022:
+
+  | test, 1000 users | random split | in time | in time, games training knows |
+  |---|---|---|---|
+  | popularity | 0.048 | 0.021 | 0.027 |
+  | content (tags) | 0.027 | 0.015 | 0.019 |
+  | ALS | 0.143 | 0.054 | 0.072 |
+  | EASE | 0.172 | 0.064 | 0.085 |
+
+  A quarter of what these users liked in 2022 is a game training never saw (released or first liked later),
+  which is the cold start problem again, and no model here can find it. Even counting only games it knows,
+  EASE finds half as much as the random split says. Part of that is how people review: a quarter of the hidden
+  games in the random split were reviewed within a day of a game the model was shown, and EASE finds those
+  more often (18% of them against 15% of the rest). EASE's lead over ALS shrinks from 0.030 to 0.011 on test
+  (interval +0.003 to +0.019) and is a tie on val (-0.008 to +0.008). The ranking of systems holds; the size
+  of every number does not, and the random split is the one most papers report.
+- **Weighing recent likes more helped on val and not on test.** On the time split, recency is fair to use, so I
+  tried what deployed systems do: EASE trained with every like losing half its weight per half-life
+  (`ease-decay:<days>`, through a `binary=False` option in [recs/ease.py](recs/ease.py)), and EASE's top 100
+  nudged by how many players liked each game in the 30 days before the cutoff (`ease+recent:<beta>`), and the
+  user's side of the same idea, each game they were shown weighted by how long ago they liked it
+  (`ease-userdecay:<days>`, what the page's "last two weeks" switch would feed):
+
+  | time split | val recall@10 | gap vs EASE, 95% interval | test recall@10 | gap vs EASE, 95% interval |
+  |---|---|---|---|---|
+  | EASE | 0.062 | | 0.064 | |
+  | EASE, half-life 730 days (best of 180 to 2,920 on val) | 0.072 | +0.010 (+0.005 to +0.015) | 0.068 | +0.003 (-0.002 to +0.009) |
+  | EASE nudged by the last 30 days (best beta on val) | 0.065 | +0.003 (-0.000 to +0.006) | 0.064 | -0.000 (-0.004 to +0.003) |
+  | the user's own recent likes weigh more, half-life 1,095 days | 0.068 | +0.006 (+0.002 to +0.009) | 0.065 | +0.001 (-0.003 to +0.004) |
+  | popularity over the last 30 days | 0.031 | | 0.026 | |
+
+  The decay was the one change whose interval cleared zero on val, and it was not a side effect of
+  regularisation (plain EASE with lambda from 150 to 4,000 stays at 0.058 to 0.062). On test the gain shrank to
+  something the eval cannot tell from nothing, the same pattern as the cold start weight: chosen on 1000
+  users, it was partly fit to them. Recent popularity beats all-time popularity as a baseline (0.031 against
+  0.019 on val), but adds nothing on top of EASE, and the user's own recent likes went the same way as the
+  decay: a gap on val, none on test. Three small val wins that did not survive one test run is the clearest
+  case in this project for keeping the test set frozen. The page uses none of them.
+- **Order helps, and it held on test.** EASE sees a library as a set. A sequential recommender reads it in
+  order; without a neural network the classic version is a transition count: over the training users' likes
+  in date order, how often game B was liked within the next three likes after game A
+  (`transitions()` in [recs/sequence.py](recs/sequence.py)). A user's score for B is the sum over their
+  games, weighted toward the latest (half-life 180 days), of P(B soon after A):
+
+  | time split | val recall@10 | test recall@10 | test gap vs EASE, 95% interval |
+  |---|---|---|---|
+  | EASE | 0.062 | 0.064 | |
+  | transitions alone (`markov`) | 0.061 | 0.066 | +0.002 (-0.007 to +0.010) |
+  | EASE's top 100 nudged by transitions (`ease+markov:3`, best of 0.3 to 30 on val) | 0.072 | **0.073** | +0.009 (+0.001 to +0.016) |
+
+  Counting what came next, a few lines of numpy, already matches EASE on its own; the two together find 14%
+  more on test than EASE, the first change in this project tuned on val that survived the test run. They
+  are wrong in different places: EASE knows which games go together, the transitions know which one tends to
+  come next. Every number here is on the time split; on the random split, order means nothing.
+- **A small transformer reading the library in order (SASRec) is the best system on the time split.**
+  [eval/sasrec.py](eval/sasrec.py) is SASRec (Kang and McAuley, 2018) in PyTorch: two causal self-attention
+  layers over the last 50 likes in date order, trained to predict each next like over all 9,899 games, on the
+  same 1.45M training users before the cutoff. Three epochs take about five minutes on a laptop RTX 4090:
+
+  | time split | val recall@10 | test recall@10 | test gap vs EASE, 95% interval |
+  |---|---|---|---|
+  | EASE | 0.062 | 0.064 | |
+  | EASE + transitions | 0.072 | 0.073 | +0.009 (+0.001 to +0.016) |
+  | SASRec, 128 dimensions, 3 epochs (1 to 3 epochs, 64 or 128 tried on val: 0.080 to 0.082) | 0.082 | 0.078 | +0.014 (+0.004 to +0.024) |
+  | **EASE's top 100 nudged by SASRec's ranking** (`ease+sasrec:3`, best of 0.5 to 3 on val) | 0.089 | **0.088** | +0.024 (+0.015 to +0.033) |
+
+  Four seeds on val give 0.082 to 0.086, so training luck moves it by about 0.004, far less than its lead.
+  It finds 22% more than EASE on test, and its edge over the few lines of transition counting is inside the
+  noise (+0.005, -0.004 to +0.015). The best is both: EASE's candidates reordered with SASRec's view finds
+  38% more than EASE, and beats SASRec alone too (+0.010, +0.002 to +0.017; retrained, SASRec gave the same
+  0.078). On the random split EASE was the clear winner; on the question a deployed system faces, what comes
+  next, the models that read order win, and a set model and an order model together win most.
 - **ALS is three times better than popularity**, and it recommends 648 different games to 1000 people where
   popularity recommends the same 18 to everyone. Tuning it was cheap: of four settings (64 or 128 factors,
   alpha 1 or 4), 64 factors with alpha 4 found the most hidden games on validation.
@@ -272,12 +351,14 @@ eval option, not used by the page.
 ## Running it
 
 ```bash
-python -m venv .venv && .venv/Scripts/pip install duckdb numpy scipy scikit-learn implicit pytest
+python -m venv .venv && .venv/Scripts/pip install ".[dev]"
 python -m recs.data path/to/steam_game_recommendations_archive.zip   # extract, check, build (~15 s)
 python -m recs.data --store path/to/steam_game_price.zip             # 2026 store catalogue (~2 min)
 python -m eval.run_eval --set val --systems popularity,content,als,hybrid
 ollama pull gemma4:12b                                              # only for the LLM rows
 python -m eval.run_eval --set val --systems rerank-als20 --users 100
+python -m eval.time_split --set val                                 # the time split (frozen in eval/time_split.json)
+python -m eval.sasrec --export && pip install ".[seq]" && python -m eval.sasrec --set val   # SASRec, wants a GPU
 python -m eval.explain_eval --set val --users 100   # how grounded the reasons are
 python -m recs.recommend --user <id from eval/split.json>   # ten picks with reasons
 ```
@@ -291,10 +372,10 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-65 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen split, the metrics and their bootstrap intervals, each recommender (owned games never recommended, unknown games ignored, empty
+73 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen splits (random and in time), the metrics and their bootstrap intervals, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 
