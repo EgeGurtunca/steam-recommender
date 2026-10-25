@@ -26,3 +26,10 @@ def test_top_up_drops_owned_and_fills():
 def test_cold_start_scores_only_new_hidden_items():
     entries = [{"user": 1, "visible": {}, "hidden": [1, 3]}, {"user": 2, "visible": {}, "hidden": [1, 2]}]
     assert metrics.cold_start_entries(entries, new_apps={3}) == [{"user": 1, "visible": {}, "hidden": [3]}]
+
+
+def test_paired_bootstrap_brackets_the_mean_gap():
+    same = metrics.paired_bootstrap([0.1, 0.5, 0.3], [0.1, 0.5, 0.3])
+    assert same == (0.0, 0.0, 0.0)
+    gap, lo, hi = metrics.paired_bootstrap([0.0] * 50 + [0.5] * 50, [0.5] * 100)
+    assert math.isclose(gap, 0.25) and 0 < lo < 0.25 < hi

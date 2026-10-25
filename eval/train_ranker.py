@@ -6,10 +6,12 @@ EASE's training together with the eval users, so both systems below run on the s
 Run: python -m eval.train_ranker --set val --ranker-users 20000
 """
 import argparse
+import json
+from datetime import datetime
 
 import numpy as np
 
-from eval.run_eval import evaluate, table
+from eval.run_eval import RESULTS, evaluate, table
 from recs.content import Content
 from recs.data import build_interactions, load_catalog, load_positives, load_store
 from recs.ease import EASE
@@ -50,6 +52,9 @@ def main() -> None:
     rows = [evaluate(ease, entries, pop_rank), evaluate(ranker, entries, pop_rank)]
     print(f"[4/4] {args.set}, {len(entries)} users")
     print(table(rows))
+    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-ranker-{args.set}.json"
+    out.write_text(json.dumps({"args": vars(args), "rows": rows}), encoding="utf-8")
+    print(f"per-user results: {out} (python -m eval.intervals {out} ease ease+ranker)")
 
 
 if __name__ == "__main__":

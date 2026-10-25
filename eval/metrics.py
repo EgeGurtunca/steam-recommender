@@ -1,6 +1,8 @@
 """Ranking metrics for one user's top-k against the games hidden from that user."""
 import math
 
+import numpy as np
+
 
 def recall_at_k(recs: list[int], hidden: list[int], k: int = 10) -> float:
     """Hidden games found in the top k, out of the most that could fit there."""
@@ -33,3 +35,12 @@ def cold_start_entries(entries: list[dict], new_apps: set[int]) -> list[dict]:
         if hidden:
             out.append({**e, "hidden": hidden})
     return out
+
+
+def paired_bootstrap(base: list[float], other: list[float], n: int = 10000, seed: int = 0) -> tuple[float, float, float]:
+    """Mean of other - base over the same users, with a 95% interval from resampling users. If the interval
+    holds 0, the eval cannot tell the two systems apart."""
+    d = np.asarray(other, dtype=float) - np.asarray(base, dtype=float)
+    means = d[np.random.default_rng(seed).integers(0, len(d), (n, len(d)))].mean(axis=1)
+    lo, hi = np.percentile(means, [2.5, 97.5])
+    return float(d.mean()), float(lo), float(hi)

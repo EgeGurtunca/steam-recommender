@@ -6,8 +6,8 @@ Give it a Steam library (games and hours played) and it recommends ten games you
 recommenders on 41 million Steam reviews, from "most popular" to a trained matrix factorisation model to a local
 LLM reranking the candidates, and measured all of them the same way on users they had never seen.
 
-The short version: the trained models win (EASE best), and the LLM made the ranking worse. Below is how much, and why that
-is still useful to know.
+The short version: the trained models win (EASE best), and the LLM did not make the ranking better while
+taking 5,000 times longer. Below is how much, how sure, and why that is still useful to know.
 
 **Stack:** Python 3.12 · DuckDB (SQL over a 2 GB CSV) · numpy / scipy · implicit (ALS) · scikit-learn (TF-IDF) ·
 Ollama (`gemma4:12b`) · pytest
@@ -93,11 +93,42 @@ recommended games sit in the popularity list (1 = most played), so low means a p
 _Same 100 users for every row; at this size one user moves recall by about 0.01, so read the gaps, not the
 third decimal._
 
+**How big a gap is real.** Every system is scored on the same users, so each gap can be resampled user by user
+(paired bootstrap, 10,000 draws, [eval/intervals.py](eval/intervals.py)). An interval that holds 0 means this
+eval cannot tell the two apart:
+
+| comparison (test) | users | recall@10 gap | 95% interval |
+|---|---|---|---|
+| ALS against EASE | 1000 | -0.030 | -0.042 to -0.017 |
+| popularity against ALS | 1000 | -0.095 | -0.110 to -0.080 |
+| ALS + content, alternating, against ALS | 1000 | -0.043 | -0.053 to -0.034 |
+| gemma4 reorders ALS's top 20, against ALS | 100 | -0.011 | -0.038 to +0.015 |
+| gemma4 reorders ALS + content, against that list | 100 | +0.017 | -0.011 to +0.047 |
+| gemma4 alone, against ALS | 100 | -0.120 | -0.168 to -0.075 |
+| cold start: 2026 tags x popularity, against tags | 125 | +0.016 | +0.000 to +0.040 |
+| learned second stage, against EASE (below) | 1000 | +0.001 | -0.003 to +0.006 |
+
+```bash
+python -m eval.intervals eval/results/<file>.json ease als    # first system is the base
+```
+
 ## What I found
 
 - **EASE beats ALS by a fifth** (0.172 against 0.143), with no training loop at all; on validation, weighting
   by hours and fusing it with ALS changed nothing, which is where I stopped. Realistically this data tops out
   around 0.2: some liked games have no trace in the rest of a player's library.
+- **EASE's lead grows with the library.** By how many games each test user liked
+  (`python -m eval.intervals <file> als ease --by-size`):
+
+  | liked games | users | ALS | EASE | gap, 95% interval |
+  |---|---|---|---|---|
+  | 10 to 14 | 541 | 0.148 | 0.168 | +0.020 (+0.001 to +0.039) |
+  | 15 to 29 | 348 | 0.146 | 0.185 | +0.040 (+0.020 to +0.059) |
+  | 30 or more | 111 | 0.106 | 0.152 | +0.046 (+0.023 to +0.071) |
+
+  ALS squeezes a big library into 64 numbers and loses detail; EASE adds up one row per game, so every game
+  keeps its say. With a small library the two are close. Every eval user liked at least 10 games, so a library
+  of three, which the page does get, is not measured here.
 - **ALS is three times better than popularity**, and it recommends 648 different games to 1000 people where
   popularity recommends the same 18 to everyone. Tuning it was cheap: of four settings (64 or 128 factors,
   alpha 1 or 4), 64 factors with alpha 4 found the most hidden games on validation.
@@ -105,10 +136,11 @@ third decimal._
   popularity rank 3262), but the games people hide are mostly popular ones, so the metric rewards popularity.
   It is a real limit of hold-out evaluation, not only of tag matching.
 - **gemma4 did not beat the model it was given.** Reordering ALS's top 20, it found fewer hidden games than ALS's
-  own order (0.149 against 0.160), and it took 10 seconds per user instead of 2 milliseconds. On validation I
+  own order (0.149 against 0.160), though 100 users cannot tell that gap from zero (interval -0.038 to +0.015):
+  at best a tie, at 10 seconds per user instead of 2 milliseconds. On validation I
   tried telling it the list was already ranked by a model trained on 1.5M players and to keep that order unless
-  it had a clear reason; the score did not move. It did improve the alternating ALS + content list (0.120 to
-  0.137); my guess, not measured, is that it moved the loose tag matches down, partly undoing my own mixing.
+  it had a clear reason; the score did not move. It scored higher on the alternating ALS + content list (0.120 to
+  0.137, again inside the noise: -0.011 to +0.047); my guess, not measured, is that it moved the loose tag matches down, partly undoing my own mixing.
   Where it may be worth its cost is the one-line reason per pick, which none of the other systems can write;
   whether people find those reasons useful is the next thing to test, with real users.
 - **gemma4 alone recommends from memory, and memory is not a catalogue.** Without a candidate list it named 990
@@ -131,8 +163,8 @@ third decimal._
   July 2022 were taken out of training, and the systems had to find them among the hidden games of the test
   users who had one (125). With the 2024 tags, content found none on test. Then I added an October 2026 store
   catalogue (130K apps: tags and review counts) and weighted tag similarity by `log1p(positive reviews)`. On
-  validation that went from 0.011 to 0.066; on test it is **0.016**, two users out of 125. Real, and much
-  smaller than validation promised: the weight was chosen on validation, and with 125 users one hit moves
+  validation that went from 0.011 to 0.066; on test it is **0.016**, two users out of 125, with an interval
+  that starts at zero (0.000 to 0.040). Barely there, and much smaller than validation promised: the weight was chosen on validation, and with 125 users one hit moves
   recall by 0.008. This is the kind of number a frozen test set exists to catch.
 - **Warm start: a game's first week beats every tag.** Stores do not wait for a new game to be old; a patent on
   game recommendations adds a co-play graph built from a new title's first players. So I gave each of the 626
@@ -167,7 +199,7 @@ third decimal._
   | EASE, test | 0.171 | 0.140 | 1120 | 294 |
   | EASE + ranker, test | 0.172 | 0.141 | 1253 | 357 |
 
-  No real gain in accuracy (a second try with three times the users and a relative-score feature gave the
+  No real gain in accuracy (the test gap's 95% interval is -0.003 to +0.006; a second try with three times the users and a relative-score feature gave the
   same), but 12% more of the catalogue reaches someone's top 10. EASE already encodes what these features
   say about popularity and co-play; what makes the second stage pay off in industry (time of day, session,
   price, what was shown and skipped) is not in a review dataset. Kept as an eval, not used by the page.
@@ -230,7 +262,8 @@ Playtime is still a rough signal: idle games left running inflate it.
 I then tried what Steam's own recommender is described as using, playtime: weight each liked game in EASE's
 sum by how long it was played, either `sqrt(hours)` or hours against the game's median playtime from the store
 catalogue (`python -m eval.run_eval --systems ease,ease-w:sqrt-hours,ease-w:rel-sqrt,ease-w:rel-log`). On val
-every variant came out slightly worse than plain EASE (recall@10 0.166 to 0.168 against 0.172), and on my
+no variant beat plain EASE (recall@10 0.166 to 0.168 against 0.172; every gap's 95% interval holds 0, the
+widest -0.015 to +0.002), and on my
 library the median version made things worse in a way I had not expected: idle games have tiny medians
 (most owners open them once), so 2,300 hours of one is 209 times its median, the strongest signal in the
 library. EASE learned from liked or not; at least for it, "how much" adds noise rather than taste. Kept as an
@@ -258,8 +291,8 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-64 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
+65 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen split, the metrics and their bootstrap intervals, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
