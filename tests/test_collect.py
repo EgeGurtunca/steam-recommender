@@ -30,3 +30,12 @@ def test_anonymize_is_stable_per_key_and_differs_across_keys():
     a = collect.anonymize("765611", b"k1")
     assert a == collect.anonymize("765611", b"k1") and a != collect.anonymize("765611", b"k2")
     assert isinstance(a, int) and a > 0
+
+
+def test_new_releases_are_sampled_at_random_not_by_fame():
+    store = {a: {"released": "2026-03-01", "positive": 30 + a, "negative": 0, "genres": ["Action"]} for a in range(1, 41)}
+    store[99] = {"released": "2020-01-01", "positive": 10**6, "negative": 0, "genres": ["Action"]}  # old: never
+    store[98] = {"released": "2026-03-01", "positive": 3, "negative": 1, "genres": ["Action"]}  # too few reviews
+    picked = collect.sample_new(store, since="2025-10-01", n=10, seed=1)
+    assert len(picked) == 10 and not {98, 99} & set(picked)
+    assert picked != sorted(store, key=lambda a: -store[a]["positive"])[:10]  # not simply the most reviewed

@@ -95,3 +95,12 @@ def test_a_stale_transition_cache_is_counted_again(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "load_positive_dates", lambda: (np.array([1, 1]), np.array([10, 11]), None, dates))
     t = sequence.load_transitions({10: 0, 11: 1, 12: 2}, tmp_path / "t.npz")
     assert t.shape == (3, 3) and t[0, 1] == 1.0
+
+
+def test_fresh_holds_out_reviewers_and_hides_only_their_new_games():
+    from eval.fresh import pick
+    by_user = {1: {10: 5.0, 11: 3.0, 99: 8.0},  # two known games and a new one: eligible
+               2: {10: 5.0, 99: 2.0},  # one known game: not enough
+               3: {10: 5.0, 11: 3.0}}  # nothing new: nothing to find
+    split = pick(by_user, new={99}, known={10, 11}, n=1)
+    assert split["val"] == [] and split["test"] == [{"user": 1, "visible": {10: 5.0, 11: 3.0}, "hidden": [99]}]

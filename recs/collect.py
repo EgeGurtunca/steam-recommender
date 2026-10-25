@@ -5,6 +5,7 @@ the moment it arrives; the Steam id itself is never written anywhere. No profile
 Requests are spaced at least a second apart.
 
 Run: python -m recs.collect --apps 400 --per-app 1000
+     python -m recs.collect --new-since 2025-10-25 --apps 400 --per-app 300   (new releases, sampled at random)
 """
 import argparse
 import hashlib
@@ -87,17 +88,32 @@ def pick_apps(n: int, old: list[int], get: Callable[[str], dict] = http_json) ->
     return list(dict.fromkeys(apps))[:n]
 
 
+def sample_new(store: dict, since: str, n: int, min_reviews: int = 20, seed: int = 0) -> list[int]:
+    """A random sample of games released from `since` with at least `min_reviews` reviews: new releases as they
+    come, mostly not hits, which the top lists above never reach."""
+    import random
+    from recs.profile import is_game
+    pool = sorted(a for a, v in store.items() if (v.get("released") or "") >= since and is_game(a, store)
+                  and v.get("positive", 0) + v.get("negative", 0) >= min_reviews)
+    return sorted(random.Random(seed).sample(pool, min(n, len(pool))))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apps", type=int, default=400)
     ap.add_argument("--per-app", type=int, default=1000)
+    ap.add_argument("--new-since", help="instead of the top lists: a random sample of games released from this date "
+                                        "(store catalogue), written to reviews_new.jsonl")
     args = ap.parse_args()
-    from recs.data import build_interactions, load_positives
+    from recs.data import build_interactions, load_positives, load_store
     from recs.popularity import Popularity
-    key, out = load_key(), OUT / "reviews.jsonl"
+    key, out = load_key(), OUT / ("reviews_new.jsonl" if args.new_since else "reviews.jsonl")
     done = {json.loads(line)["app_id"] for line in out.open(encoding="utf-8")} if out.exists() else set()
-    popular = Popularity(build_interactions(*load_positives(), exclude_users=set())).ranking[:300]
-    apps = [a for a in pick_apps(args.apps, popular) if a not in done]
+    if args.new_since:
+        apps = [a for a in sample_new(load_store(), args.new_since, args.apps) if a not in done]
+    else:
+        popular = Popularity(build_interactions(*load_positives(), exclude_users=set())).ranking[:300]
+        apps = [a for a in pick_apps(args.apps, popular) if a not in done]
     with out.open("a", encoding="utf-8") as f:
         for i, app in enumerate(apps, 1):
             try:

@@ -303,6 +303,39 @@ The training data ends in 2022, so I looked for something newer:
   moment it arrives; Steam ids are never written, and no profiles or libraries are read. 299K reviews, but 91%
   of the 261K authors appear once, and only 1,634 reviewed five games or more, too few links between games to
   train on (the 2022 data has 1.9M such users). It stays a source of recent popularity, not training data.
+  Then the warm start result made me look again, and I pointed the collector at new releases too: a random
+  sample of 1,200 games released in 2025 (`--new-since`, 97K reviews), not the top lists. With the collected
+  reviewers added to EASE's training and 1,537 of them held out ([eval/fresh.py](eval/fresh.py)), every system
+  ranks the 1,011 games from 2023 on that the reviews cover, and has to find each held-out reviewer's ones
+  (test, share of hidden games found):
+
+  | | hits from the top lists (304) | random 2025 releases (679) |
+  |---|---|---|
+  | popularity | **0.967** | 0.000 |
+  | tags x popularity (the page now) | 0.605 | **0.085** |
+  | EASE + collected reviews | 0.306 | 0.077 |
+
+  Popularity finds the hits and never a new game that is not one. On those, co-likes from these reviews do no
+  better than tags (-0.009, interval -0.035 to +0.016). With the first 400 games EASE was ahead (0.148
+  against 0.102), inside the noise; tripling the sample took it away. The difference from the warm start eval
+  is the reviewers: there each new game's early players came with a full 2022 library, here a collected
+  reviewer has a handful of reviews among the games I happened to collect, too little to link a new game to
+  the rest.
+
+  The same eval prices the page's own knob, how much popularity weighs against tag similarity
+  (`log1p(positive reviews) ** power`, test):
+
+  | power | hits found | random 2025 releases found |
+  |---|---|---|
+  | 1 (the page) | 0.605 | **0.085** |
+  | 2 | 0.757 | 0.062 |
+  | 3 | 0.822 | 0.052 |
+  | 5 | 0.908 | 0.038 |
+
+  Every step buys hits with new games nobody has heard of, and both sides of each trade clear their
+  intervals. Recall over everyone rises with the power (0.261 to 0.325), because hits are what most people
+  liked; I keep power 1, since a "new for you" list that mostly shows the year's hits tells a player little
+  they did not know. That is a product choice the eval can price but not make.
   Valve switched off the store's review endpoint on 22 October 2026, mid-project; the collector uses its Web
   API replacement, `IUserReviewsService/GetAppReviews`.
 
@@ -384,7 +417,7 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-75 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+77 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen splits (random and in time), the metrics and their bootstrap intervals, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
@@ -392,7 +425,7 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 ## What's next
 
 - A Telegram bot in front of the same engine
-- For 2023 to 2026 games, the warm start result says what to collect: a week of reviews per new game beats its
-  tags, so the anonymised review collector pointed at new releases is the next data step
+- For new releases, reviewers with more of their library: per-game review sampling gives each reviewer a
+  handful of links, which the fresh eval shows is not enough to beat tags
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
