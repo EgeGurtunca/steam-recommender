@@ -24,13 +24,12 @@ def card(app: int, store: dict, catalog: Catalog) -> dict:
 
 def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weights: dict | None = None) -> dict:
     weights = weights or profile.idf(store)
-    played = {a: h for a, h in lib.games.items() if h >= 2}
+    played, picks = next_picks(lib, store, ranker)
     taste = {}
     for name, library in (("all", played), ("recent", lib.recent)):
         top = profile.taste_profile(library, store, top=TASTE_TAGS, weights=weights)
         taste[name] = [{"tag": t, "share": round(s, 4)} for t, s in top]
     tags = list(dict.fromkeys(t["tag"] for t in taste["all"] + taste["recent"]))
-    picks = [a for a in ranker.ranking(played, 60) if a not in lib.games and profile.is_game(a, store)][:10]
     new = profile.new_releases(played, store, weights=weights)
     top_played = sorted(played.items(), key=lambda x: -x[1])[:6]
     return {"games": len(lib.games), "played": len(played), "hours": round(sum(lib.games.values())),
@@ -38,6 +37,27 @@ def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weig
             "split": profile.social_split(played, store),
             "top_played": [{"title": lib.titles.get(a, str(a)), "hours": h} for a, h in top_played],
             "next": [card(a, store, catalog) for a in picks], "new": [card(a, store, catalog) for a in new]}
+
+
+def next_picks(lib: steam.SteamLibrary, store: dict, ranker) -> tuple[dict, list[int]]:
+    played = {a: h for a, h in lib.games.items() if h >= 2}
+    return played, [a for a in ranker.ranking(played, 60) if a not in lib.games and profile.is_game(a, store)][:10]
+
+
+def reasons(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, generate=None) -> list[dict]:
+    """gemma4's one line per "play next" card, in the page's order (the explainer never reorders)."""
+    from recs import explain, llm
+
+    class Fixed:  # the explainer asks its ranker for picks; give it the page's picks
+        def recommend(self, library, k=10):
+            return picks[:k]
+
+    played, picks = next_picks(lib, store, ranker)
+    # names and tags for every game, including the 2023-2026 ones only the store catalogue knows
+    merged = Catalog({a: v["title"] for a, v in store.items()} | catalog.titles | lib.titles,
+                     {a: v["tags"] for a, v in store.items()} | {a: t for a, t in catalog.tags.items() if t}, {})
+    e = explain.Explainer(Fixed(), merged, generate=generate or llm.generate_json)
+    return [{"app_id": a, "reason": r} for a, r in e.explain(played, len(picks)) if r]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -54,12 +74,18 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         if url.path == "/":
             return self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-        if url.path != "/api/profile":
+        if url.path not in ("/api/profile", "/api/reasons"):
             return self.send(404, b"not found", "text/plain")
         link = urllib.parse.parse_qs(url.query).get("link", [""])[0]
         try:
             lib = steam.load_library(link)
-            body = payload(lib, self.state["store"], self.state["ease"], self.state["catalog"], self.state["weights"])
+            st = self.state
+            if url.path == "/api/reasons":
+                from recs import llm
+                with llm.ollama():  # started for this request and stopped (with its children) right after
+                    body = reasons(lib, st["store"], st["ease"], st["catalog"])
+            else:
+                body = payload(lib, st["store"], st["ease"], st["catalog"], st["weights"])
             return self.send(200, json.dumps(body).encode(), "application/json")
         except (ValueError, steam.PrivateLibrary) as e:
             return self.send(400, json.dumps({"error": str(e)}).encode(), "application/json")

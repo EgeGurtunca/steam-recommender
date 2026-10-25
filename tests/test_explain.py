@@ -30,3 +30,10 @@ def test_schema_only_allows_the_picks_and_a_failure_keeps_the_order():
 def test_grounded_means_the_reason_names_a_played_game():
     assert grounded("Since you loved Helldivers 2's co-op", {2: 50.0}, CAT)
     assert not grounded("A great puzzle game", {2: 50.0}, CAT)
+
+
+def test_a_reason_that_cites_the_pick_itself_is_dropped():
+    fake = lambda prompt, sch: {"reasons": [{"app_id": 3, "reason": "Fans of Deep Rock Galactic and Portal 2 will love it"},
+                                            {"app_id": 4, "reason": "Like Deep Rock Galactic"}]}
+    out = Explainer(FakeRanker(), CAT, generate=fake).explain({1: 100.0}, k=2)
+    assert out == [(3, ""), (4, "Like Deep Rock Galactic")]

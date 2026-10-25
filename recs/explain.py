@@ -37,10 +37,12 @@ class Explainer:
         prompt = (f"A Steam player liked these games (hours played):\n{played}\n\n"
                   f"A recommender picked these games for them:\n{listed}\n\n"
                   "For each pick, write one short English sentence on why this player may like it. Name the "
-                  "played game(s) that make it a good fit, by their exact title. Do not reorder or add games.")
+                  "played game(s) that make it a good fit, by their exact title, choosing only from the list of games "
+                  "they played above. Never cite the recommended game itself. Do not reorder or add games.")
         try:
             got = {r["app_id"]: r.get("reason", "") for r in self.generate(prompt, schema(picks))["reasons"]}
         except Exception:
             self.failures += 1
             got = {}
-        return [(a, got.get(a, "")) for a in picks]
+        # the prompt says not to, and gemma4 still did it for 1 in 10 on a real profile: enforce it here
+        return [(a, "" if grounded(got.get(a, ""), {a: 1.0}, self.catalog) else got.get(a, "")) for a in picks]

@@ -20,3 +20,15 @@ def test_payload_has_taste_split_and_picks_without_owned_or_programs():
     assert p["taste"]["recent"] and set(p["split"]) == {"multiplayer", "singleplayer"}
     assert [g["app_id"] for g in p["next"]] == [2]
     assert all(g["header"].startswith("https://") for g in p["next"])
+
+
+def test_reasons_follow_the_page_order_and_use_store_titles_for_new_games():
+    lib = SteamLibrary("765", {1: 50.0, 7: 30.0}, titles={1: "A", 7: "Brand New"})
+    store = {**STORE, 7: {"title": "Brand New", "tags": ["Strategy"], "genres": [], "released": "2025-05-01", "positive": 100}}
+    prompts = []
+    def fake(prompt, schema):
+        prompts.append(prompt)
+        return {"reasons": [{"app_id": 2, "reason": "You liked A and Brand New"}]}
+    out = web.reasons(lib, store, FakeRanker(), Catalog({1: "A", 2: "B", 3: "Tool"}, {1: ["Strategy"]}, {}), generate=fake)
+    assert out == [{"app_id": 2, "reason": "You liked A and Brand New"}]
+    assert "Brand New" in prompts[0]  # a 2025 game the 2022 catalogue does not know still has a name in the prompt

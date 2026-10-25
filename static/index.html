@@ -36,6 +36,7 @@
   .card div { padding: 9px 11px; }
   .card b { display: block; font-size: 14px; }
   .card small { color: var(--muted); }
+  .reason { color: #c9d4e0; font-size: 13px; margin: 6px 0 0; font-style: italic; }
   .hidden { display: none; }
   footer { color: var(--muted); font-size: 12px; margin-top: 24px; }
 </style>
@@ -56,7 +57,7 @@
       <h2>Your taste <span><button class="ghost on" data-view="all">All time</button> <button class="ghost" data-view="recent">Last 2 weeks</button></span></h2>
       <svg id="graph"></svg>
     </section>
-    <section><h2>Play next</h2><div class="cards" id="next"></div></section>
+    <section><h2>Play next <button class="ghost" id="why">Why these? (local LLM, about 30 s)</button></h2><div class="cards" id="next"></div></section>
     <section><h2>New since 2024 that fit your tags</h2><div class="cards" id="new"></div></section>
   </div>
   <footer>Recommendations: EASE trained on 41M public Steam reviews (to 2022) and an October 2026 store catalogue. Not affiliated with Valve.</footer>
@@ -70,6 +71,22 @@ new ResizeObserver(() => {
   if (data && w && Math.abs(w - lastWidth) > 40) drawGraph();
 }).observe($("graph"));
 
+$("why").addEventListener("click", async () => {
+  const btn = $("why"); btn.disabled = true; btn.textContent = "gemma4 is reading your library...";
+  try {
+    const r = await fetch("/api/reasons?link=" + encodeURIComponent($("link").value.trim()));
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || "Something went wrong");
+    body.forEach(({ app_id, reason }) => {
+      const card = document.querySelector(`#next [data-app="${app_id}"] div`);
+      if (!card) return;
+      card.querySelector(".reason")?.remove();
+      const p = document.createElement("p"); p.className = "reason"; p.textContent = reason; card.append(p);
+    });
+    btn.textContent = "Reasons by gemma4, from the games you played";
+  } catch (err) { btn.disabled = false; btn.textContent = "Failed: " + err.message + " (try again)"; }
+});
+
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const link = $("link").value.trim();
@@ -80,6 +97,7 @@ $("form").addEventListener("submit", async e => {
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || "Something went wrong");
     data = body; $("status").textContent = ""; render();
+    $("why").disabled = false; $("why").textContent = "Why these? (local LLM, about 30 s)";
   } catch (err) { $("status").className = "err"; $("status").textContent = err.message; }
 });
 
@@ -111,6 +129,7 @@ function render() {
 function cards(id, games) {
   $(id).replaceChildren(...games.map(g => {
     const a = document.createElement("a"); a.className = "card"; a.href = g.url; a.target = "_blank"; a.rel = "noopener";
+    a.dataset.app = g.app_id;
     const img = document.createElement("img"); img.src = g.header; img.alt = ""; img.loading = "lazy";
     const d = document.createElement("div");
     const b = document.createElement("b"); b.textContent = g.title;

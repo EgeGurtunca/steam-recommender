@@ -123,7 +123,9 @@ third decimal._
   came back empty, no call failed. The check is strict (exact titles), so a played game listed under a longer
   edition name counts as a miss. The failure it does have: 14% of sentences mention the recommended game's own
   title. Most of those are harmless ("Portal 2 offers..."), but some cite it as if the player had played it
-  ("...similar to State of Decay 2 and Dying Light's atmosphere", for Dying Light).
+  ("...similar to State of Decay 2 and Dying Light's atmosphere", for Dying Light). On my own library, 3 of 10
+  reasons did this; telling the model not to cut it to 1, so the code now drops any reason that names the
+  game it explains.
 - **Cold start: tags alone found nothing; fresh tags times popularity found a little.** The idea was that ALS
   cannot know games released after its data ends, but tags can. I simulated it: the 626 games released from
   July 2022 were taken out of training, and the systems had to find them among the hidden games of the test
@@ -174,7 +176,10 @@ python -m recs.web      # http://127.0.0.1:8000
 Paste a profile link and it draws the taste as a bubble graph (D3): one bubble per tag, sized by its share,
 linked to the tags that describe the same games across the store (Jaccard over well-reviewed games), so related
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
-shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages.
+shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages. A button
+asks gemma4 for one line per "play next" card, from the games you played (schema-limited to those ten, in
+EASE's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
+still reads correctly. Ollama is started for that request and stopped right after.
 
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
 and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
@@ -203,14 +208,14 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-58 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+60 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 
-- A Telegram bot in front of the same engine, and gemma4's one-line reasons on the page
+- A Telegram bot in front of the same engine
 - A newer game catalogue for 2023 to 2026 games, and a better answer to cold start than tags
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
