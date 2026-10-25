@@ -114,3 +114,12 @@ def test_ease_survives_a_save_and_load(tmp_path):
     e.save(tmp_path / "ease")
     back = EASE.load(tmp_path / "ease", fallback=[3, 1])
     assert back.recommend({1: 10.0}, 1) == [2] and back.recommend({999: 1.0}, 2) == [3, 1]
+
+
+def test_warm_start_adds_back_only_each_new_games_first_k_reviews():
+    from eval.warm_start import with_first
+    base = (np.array([1, 2]), np.array([10, 10]), np.array([5.0, 5.0]))
+    early = (np.array([1, 2, 9]), np.array([20, 20, 20]), np.array([3.0, 3.0, 3.0]), np.array([1, 3, 2]))
+    train = with_first(2, base, early, eval_users={9})
+    assert train.matrix[:, train.item_index[20]].nnz == 1  # order 1 kept, order 3 too late, eval user 9 never
+

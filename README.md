@@ -134,6 +134,25 @@ third decimal._
   validation that went from 0.011 to 0.066; on test it is **0.016**, two users out of 125. Real, and much
   smaller than validation promised: the weight was chosen on validation, and with 125 users one hit moves
   recall by 0.008. This is the kind of number a frozen test set exists to catch.
+- **Warm start: a game's first week beats every tag.** Stores do not wait for a new game to be old; a patent on
+  game recommendations adds a co-play graph built from a new title's first players. So I gave each of the 626
+  new games back its early positive reviews, from training users only (an eval user's own review never goes
+  in), retrained EASE and scored the same 125 test users ([eval/warm_start.py](eval/warm_start.py)):
+
+  | early data per new game | val recall@10 | test recall@10 |
+  |---|---|---|
+  | none (cold start, EASE) | 0.000 | 0.000 |
+  | tags x popularity, 2026 catalogue | 0.066 | 0.016 |
+  | first 7 days of reviews | 0.101 | **0.052** |
+  | first 30 days | 0.109 | 0.060 |
+  | first 90 days | 0.134 | 0.071 |
+  | everything to the end of 2022 | 0.150 | 0.073 |
+
+  One week of reviews already gives 70% of what the full data gives on test, and three times what tags gave.
+  My first version of this cut each game at its first k reviews instead of its first k days, and found almost
+  nothing (0.005 on test even at 1,000 reviews): capping every game at the same count erases the one thing
+  EASE learns from a new game, that the hit gets many more reviews than the rest. A week keeps that
+  difference. The data ends in December 2022, so "everything" is at most six months for these games.
 
 ## Fresher data
 
@@ -221,7 +240,7 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-62 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+63 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
@@ -229,6 +248,7 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 ## What's next
 
 - A Telegram bot in front of the same engine
-- A newer game catalogue for 2023 to 2026 games, and a better answer to cold start than tags
+- For 2023 to 2026 games, the warm start result says what to collect: a week of reviews per new game beats its
+  tags, so the anonymised review collector pointed at new releases is the next data step
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
