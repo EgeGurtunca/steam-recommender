@@ -123,3 +123,21 @@ def test_warm_start_adds_back_only_each_new_games_first_k_reviews():
     train = with_first(2, base, early, eval_users={9})
     assert train.matrix[:, train.item_index[20]].nnz == 1  # order 1 kept, order 3 too late, eval user 9 never
 
+
+def test_ranker_reorders_ease_candidates_by_what_it_learned():
+    from recs.ranker import FEATURES, Features, Ranker
+
+    class FakeEase:  # five games, EASE prefers 1 > 2 > 3; game 3 is the one users actually pick
+        item_ids = np.array([1, 2, 3, 4, 5])
+
+        def scores(self, library):
+            s = np.array([5.0, 4.0, 3.0, 0.0, 0.0])
+            s[[int(a) - 1 for a in library if a in (1, 2, 3, 4, 5)]] = -np.inf
+            return s
+
+    store = {3: {"positive": 9000, "negative": 100, "released": "2021-01-01"}}
+    f = Features(FakeEase(), None, {1: 10, 2: 10, 3: 10}, store, {})
+    apps, x = f.candidates({4: 5.0}, n=3)
+    assert apps == [1, 2, 3] and x.shape == (3, len(FEATURES))
+    r = Ranker(f).fit([{"visible": {4: 5.0}, "hidden": [3]}, {"visible": {5: 5.0}, "hidden": [3]}] * 20)
+    assert r.recommend({4: 5.0}, 1) == [3]

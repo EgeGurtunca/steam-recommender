@@ -153,6 +153,24 @@ third decimal._
   nothing (0.005 on test even at 1,000 reviews): capping every game at the same count erases the one thing
   EASE learns from a new game, that the hit gets many more reviews than the rest. A week keeps that
   difference. The data ends in December 2022, so "everything" is at most six months for these games.
+- **A learned second stage did not beat EASE.** Large recommenders run in two stages: one model proposes a few
+  hundred candidates, a second reorders them with richer features. I built that over EASE
+  ([recs/ranker.py](recs/ranker.py)): EASE proposes 50, gradient boosting (scikit-learn) reorders them with
+  EASE's score and rank, popularity, release year, the store's review share and count, tag similarity and
+  library size. It learns from 60,000 training users with 20% of their games hidden, who are left out of EASE's
+  training too, so their scores look like a new user's (`python -m eval.train_ranker`):
+
+  | | recall@10 | ndcg@10 | coverage | mean pop rank |
+  |---|---|---|---|---|
+  | EASE, val | 0.171 | 0.138 | 1128 | 293 |
+  | EASE + ranker, val | 0.173 | 0.141 | 1291 | 366 |
+  | EASE, test | 0.171 | 0.140 | 1120 | 294 |
+  | EASE + ranker, test | 0.172 | 0.141 | 1253 | 357 |
+
+  No real gain in accuracy (a second try with three times the users and a relative-score feature gave the
+  same), but 12% more of the catalogue reaches someone's top 10. EASE already encodes what these features
+  say about popularity and co-play; what makes the second stage pay off in industry (time of day, session,
+  price, what was shown and skipped) is not in a review dataset. Kept as an eval, not used by the page.
 
 ## Fresher data
 
@@ -240,7 +258,7 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-63 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+64 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen split, the metrics, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
