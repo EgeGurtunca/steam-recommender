@@ -3,6 +3,7 @@ name = "steam-recommender"
 version = "0.1.0"
 description = "Steam game recommendations from a library: popularity, tags, ALS and a local LLM reranker, with an honest offline eval."
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = ["duckdb", "numpy", "scipy", "scikit-learn", "implicit"]
 
 [project.optional-dependencies]

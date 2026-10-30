@@ -516,3 +516,6 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
   handful of links, which the fresh eval shows is not enough to beat tags
 
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
+
+The code is under the [MIT license](LICENSE). The datasets, Steam's reviews and the game images are not part of
+this repository and keep their own terms.
