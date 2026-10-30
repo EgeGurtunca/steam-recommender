@@ -165,6 +165,7 @@ for, how well it does and where it falls short is summed up in its [model card](
 - [With only three games shown, the same order holds.](docs/findings.md#with-three-games-the-order-still-holds)
 - [A rerank for variety cost nothing measurable, so the page uses it.](docs/findings.md#variety-cost-nothing-measurable)
 - [LightGCN, a graph neural network, landed below EASE and level with ALS.](docs/findings.md#a-graph-neural-network-did-not-beat-ease-either)
+- [Deployed a year earlier (2021), order still helps: 16% more than EASE on 2,000 fresh users.](docs/findings.md#order-helped-in-2021-too)
 - [Each game's 200 largest weights in float16 (8 MB, not 447) find the same as the full EASE.](docs/findings.md#an-8-mb-ease-finds-the-same-as-the-447-mb-one)
 
 **New games**
@@ -248,6 +249,7 @@ python -m eval.run_eval --set val --systems popularity,content,als,hybrid
 ollama pull gemma4:12b                                              # only for the LLM rows
 python -m eval.run_eval --set val --systems rerank-als20 --users 100
 python -m eval.time_split --set val                                 # the time split (frozen in eval/time_split.json)
+python -m eval.time_split --cutoff 2021-01-01 --set val --systems ease,ease+markov:3   # deployed a year earlier
 python -m eval.sasrec --export && pip install ".[seq]" && python -m eval.sasrec --set val   # SASRec, wants a GPU
 python -m eval.lightgcn --epochs 40 --batch 131072 --lr 0.01         # LightGCN on the same export, val and test
 python -m eval.explain_eval --set val --users 100   # how grounded the reasons are
@@ -273,7 +275,7 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 - A Telegram bot in front of the same engine
 - Once people use the page: team-draft interleaving between two rankers (one list mixed from both, credit to the
   one whose games get clicked), the online test stores use with few users, with "Not for me" as the negative
-- A second time cutoff (2021), to check the order-aware result in another year
+- SASRec retrained for the 2021 cutoff (the transitions result already held there)
 - For new releases, reviewers with more of their library: per-game review sampling gives each reviewer a
   handful of links, which the fresh eval shows is not enough to beat tags
 

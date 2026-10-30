@@ -73,10 +73,10 @@ class RecentNudge:
         return top_up(sorted(cands, key=lambda a: -score[a]), self.fallback, library, k)
 
 
-def by_recency(entries: list[dict], liked_on: dict, half_life: float, cutoff: str = CUTOFF) -> list[dict]:
+def by_recency(entries: list[dict], liked_on: dict, half_life: float, cutoff: str | None = None) -> list[dict]:
     """The same users with each visible game weighted by how long before the cutoff they liked it, half the weight
     per half-life: what a user liked lately says more about what they like next."""
-    end = np.datetime64(cutoff)
+    end = np.datetime64(cutoff or CUTOFF)
     return [{**e, "visible": {a: 0.5 ** ((end - liked_on[(e["user"], a)]).astype(int) / half_life) for a in e["visible"]}}
             for e in entries]
 
@@ -204,19 +204,29 @@ def main() -> None:
                     help="also pop-recent:<days>, ease-decay:<half-life days>, ease+recent:<beta>, "
                          "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, ease+sasrec-np:<gamma>, "
                          "ease-top:<k>")
+    ap.add_argument("--cutoff", help="another deployment date (e.g. 2021-01-01): its own frozen split, the year "
+                                     "after it hidden, everything later dropped")
     args = ap.parse_args()
 
     users, apps, hours, dates = positive_dates()
+    if args.cutoff:
+        global CUTOFF, TIME_SPLIT_PATH, HOLDOUT_PATH
+        CUTOFF, year = args.cutoff, args.cutoff[:4]
+        TIME_SPLIT_PATH = ROOT / "eval" / f"time_split_{year}.json"
+        HOLDOUT_PATH = ROOT / "eval" / f"time_holdout_{year}.json"
+        world = dates < np.datetime64(CUTOFF) + np.timedelta64(365, "D")
+        users, apps, hours, dates = users[world], apps[world], hours[world], dates[world]
     if args.make:
         try:
-            save_split(make_time_split(users, apps, hours, dates), TIME_SPLIT_PATH)
+            save_split(make_time_split(users, apps, hours, dates, cutoff=CUTOFF), TIME_SPLIT_PATH)
         except FileExistsError as e:
             raise SystemExit(str(e))
         print(f"wrote {TIME_SPLIT_PATH}")
         return
     if args.make_holdout:
         taken = frozenset(e["user"] for part in load_split(TIME_SPLIT_PATH).values() for e in part)
-        group = make_time_split(users, apps, hours, dates, n_val=1000, n_test=0, seed=7, exclude=taken)["val"]
+        group = make_time_split(users, apps, hours, dates, cutoff=CUTOFF, n_val=1000, n_test=0, seed=7,
+                                exclude=taken)["val"]
         try:
             save_split({"holdout": group}, HOLDOUT_PATH)
         except FileExistsError as e:
@@ -257,7 +267,7 @@ def main() -> None:
                  if any(a in train.item_index for a in u["hidden"])]
         print(f"{r['system']}: recall@10 {sum(known) / len(known):.3f} on games training knows ({len(known)} users)")
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time-{args.set}{f'-last{args.last}' if args.last else ''}.json"
+    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time{'-' + CUTOFF[:4] if args.cutoff else ''}-{args.set}{f'-last{args.last}' if args.last else ''}.json"
     out.write_text(json.dumps({"args": vars(args), "rows": rows}), encoding="utf-8")
     print(f"per-user results: {out}")
 

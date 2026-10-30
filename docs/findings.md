@@ -288,6 +288,27 @@ One run with its settings fixed beforehand, scored on both sets: 0.053 on val an
 on this kind of data (Dacrema et al., 2019); I tuned LightGCN far less than EASE, so read it as "not for free"
 rather than "worse".
 
+### Order helped in 2021 too
+
+Every time split number so far comes from one deployment date, the start of 2022. To see if "order helps" was
+that year's luck, I froze a second split as if deployed at the start of 2021 (`--cutoff 2021-01-01`,
+[eval/time_split_2021.json](../eval/time_split_2021.json)): training on likes before it, 2,000 new users whose
+2021 likes are hidden, everything after 2021 dropped. Nothing was tuned again: `ease+markov:3` is the setting
+chosen on 2022's val.
+
+| 2021 cutoff | val recall@10 | test recall@10 | both groups (2,000 users) |
+|---|---|---|---|
+| popularity | 0.030 | 0.026 | |
+| EASE | 0.061 | 0.063 | 0.062 |
+| transitions alone | 0.069 | 0.063 | |
+| EASE nudged by transitions | 0.073 | 0.070 | 0.072 |
+| gap, 95% interval | +0.013 (+0.005 to +0.020) | +0.007 (-0.001 to +0.015) | **+0.010 (+0.004 to +0.015)** |
+
+Since no setting was picked on either 2021 group, both are fresh for this question and can be pooled: order
+finds 16% more than EASE in 2021, against 14% in 2022. The test group alone falls just short of a clear gap,
+which is the honest size of one thousand users. SASRec was not retrained for 2021 (it needs the GPU); the
+claim checked here is the order-aware nudge the page falls back to.
+
 ### An 8 MB EASE finds the same as the 447 MB one
 
 EASE's weights are a dense 10,816 x 10,816 matrix, too big to ship with the code. I kept each game's k largest
