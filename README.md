@@ -222,11 +222,25 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   | SASRec, 128 dimensions, 3 epochs (1 to 3 epochs, 64 or 128 tried on val: 0.080 to 0.082) | 0.082 | 0.078 | +0.014 (+0.004 to +0.024) |
   | **EASE's top 100 nudged by SASRec's ranking** (`ease+sasrec:3`, best of 0.5 to 3 on val) | 0.089 | **0.088** | +0.024 (+0.015 to +0.033) |
 
-  Four seeds on val give 0.082 to 0.086, so training luck moves it by about 0.004, far less than its lead.
+  Four seeds on val give 0.082 to 0.086, so training luck moves it by about 0.004, far less than its lead;
+  a third layer gave 0.078 on val, so it stays at two, and adding how long each game was played (a log2-hours
+  embedding, `--hours`) gave 0.082, the same as without. A longer history would change little: the median user
+  shows 13 games, well under the 50 it reads.
   It finds 22% more than EASE on test, and its edge over the few lines of transition counting is inside the
   noise (+0.005, -0.004 to +0.015). The best is both: EASE's candidates reordered with SASRec's view finds
   38% more than EASE, and beats SASRec alone too (+0.010, +0.002 to +0.017; retrained, SASRec gave the same
-  0.078). On the random split EASE was the clear winner; on the question a deployed system faces, what comes
+  0.078). Nor does it buy accuracy with popularity, the usual trade (test):
+
+  | time split | recall@10 | different games recommended | mean popularity rank |
+  |---|---|---|---|
+  | EASE | 0.064 | 990 | 243 |
+  | EASE + transitions | 0.073 | 701 | 172 |
+  | SASRec | 0.078 | 1176 | 592 |
+  | EASE + SASRec | 0.088 | 996 | 298 |
+  | LightGCN (below) | 0.052 | 753 | 138 |
+
+  The transition counts gain by leaning on what is popular; SASRec gains while recommending more of the
+  catalogue and less popular games than EASE. On the random split EASE was the clear winner; on the question a deployed system faces, what comes
   next, the models that read order win, and a set model and an order model together win most. The page uses
   that pair without torch: [recs/sasrec_np.py](recs/sasrec_np.py) is the same forward pass in numpy, trained
   once on every positive (`python -m eval.sasrec --page`), and gives torch's top 10 for every checked library
