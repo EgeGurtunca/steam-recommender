@@ -34,6 +34,7 @@
   .card a { text-decoration: none; color: inherit; display: block; }
   .card .nope { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; background: #0b1520cc; color: var(--muted); border: 1px solid var(--line); opacity: 0; }
   .card:hover .nope, .card .nope:focus { opacity: 1; }
+  @media (hover: none) { .card .nope { opacity: 1; } }  /* touch screens have no hover */
   .card:hover { border-color: var(--accent); }
   .card img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: var(--line); }
   .card div { padding: 9px 11px; }
