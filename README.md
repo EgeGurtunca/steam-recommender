@@ -236,7 +236,8 @@ about 0.3 s and holds about 770 MB, most of it EASE's 10,816 x 10,816 matrix (`p
 test fails if one page takes over a second on a store of real size.
 
 Without the 2 GB of reviews: `python -m recs.bundle` packs what the page reads (both catalogues, SASRec's weights
-and a small EASE, see above) into `dist/demo-data.zip`, 19.8 MB with a notice of the data's sources and licenses.
+and a small EASE, see above) into `dist/demo-data.zip`, 19.5 MB with a notice of the data's sources and licenses (the
+catalogue's MIT text included) and no player's history.
 Unzipped into the repository's folder, `python -m recs.web` runs with no download and no training.
 
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
@@ -286,8 +287,8 @@ pytest
 ruff check .   # lint, as in CI: pyflakes, pycodestyle, import order, bugbear
 ```
 
-91 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, the description recommender and its bridge to ALS, the small EASE (largest weights by size, negative ones kept), each recommender (owned games never recommended, unknown games ignored, empty
+93 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, the description recommender and its bridge to ALS, the small EASE (largest weights by size, negative ones kept) and the bundle (no training histories, the data's licenses in its notice), each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key, one page in under a second, the last two weeks' own picks, play together by least misery), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
@@ -302,4 +303,5 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
 
 The code is under the [MIT license](LICENSE). The datasets, Steam's reviews and the game images are not part of
-this repository and keep their own terms.
+this repository and keep their own terms. If you hold rights to any of the data here or in the demo bundle and want it
+removed, open an [issue](https://github.com/EgeGurtunca/steam-recommender/issues) and it will be taken down.

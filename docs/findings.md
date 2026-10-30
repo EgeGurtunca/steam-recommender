@@ -328,7 +328,7 @@ the liked ones' fans avoid. Keeping the largest by size, negative ones too, lost
 | 1,000 weights per game, float16 | 0.065 | +0.001 (-0.000 to +0.002) |
 
 So the page can run from a small copy: [recs/bundle.py](../recs/bundle.py) writes it with the catalogue and
-SASRec's weights into a 19.8 MB zip, and on the demo library the page's top ten are the same games in the same
+SASRec's weights into a 19.5 MB zip, and on the demo library the page's top ten are the same games in the same
 order as with the full matrix.
 
 ## New games
