@@ -20,6 +20,7 @@ SEQ_ALL = ROOT / "data" / "build" / "seq_all.npz"  # every positive, for the pag
 PAGE_MODEL = ROOT / "data" / "build" / "sasrec_page.npz"
 RESULTS = ROOT / "eval" / "results"
 MAX_LEN = 50
+TAG = ""  # results file tag: "2021-" for another cutoff
 
 
 HOUR_BUCKETS = 12  # log2(hours + 1), 0 for padding and under 1 hour, up to 2,000+ hours
@@ -29,10 +30,13 @@ def bucket(hours: np.ndarray) -> np.ndarray:
     return np.clip(np.log2(np.asarray(hours, dtype=np.float64) + 1), 0, HOUR_BUCKETS - 1).astype(np.int64)
 
 
-def export(everything: bool = False) -> None:
+def export(everything: bool = False, cutoff: str | None = None) -> None:
     """The time split's training sequences and eval users, or with everything=True every positive (the page)."""
-    from eval.time_split import CUTOFF, load_groups
+    from eval import time_split
     from recs.data import load_positive_dates
+    if cutoff:
+        time_split.use_cutoff(cutoff)
+    CUTOFF, load_groups = time_split.CUTOFF, time_split.load_groups
 
     users, apps, hours, dates = load_positive_dates()
     split = {} if everything else load_groups()  # val, test and the holdout group all stay out of training
@@ -170,7 +174,7 @@ def train_and_score(part: str | None, epochs: int, dim: int, seed: int, save=Non
     recall = np.mean([len(set(u["recs"]) & set(u["hidden"])) / min(10, len(u["hidden"])) for u in per_user])
     print(f"sasrec, time split {part}: recall@10 {recall:.3f} ({len(per_user)} users)")
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-sasrec-{part}.json"
+    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-sasrec-{TAG}{part}.json"
     out.write_text(json.dumps({"args": {"set": part, "epochs": epochs, "dim": dim},
                                "rows": [{"system": f"sasrec:{dim}" + (f"x{layers}" if layers != 2 else "")
                                                    + ("+hours" if use_hours else ""),
@@ -189,9 +193,13 @@ def main() -> None:
     ap.add_argument("--hours", action="store_true", help="add a log2-hours bucket embedding to each game")
     ap.add_argument("--page", action="store_true", help="with --export: every positive; else train the page's model")
     ap.add_argument("--save", help="also save the weights here (numpy, for recs/sasrec_np.py)")
+    ap.add_argument("--cutoff", help="the split eval.time_split --cutoff froze (its own seq file and results)")
     args = ap.parse_args()
+    if args.cutoff:
+        global SEQ, TAG
+        SEQ, TAG = SEQ.with_name(f"seq_{args.cutoff[:4]}.npz"), args.cutoff[:4] + "-"
     if args.export:
-        export(everything=args.page)
+        export(everything=args.page, cutoff=args.cutoff)
     elif args.page:
         train_and_score(None, args.epochs, args.dim, args.seed, save=args.save or PAGE_MODEL, layers=args.layers)
     else:

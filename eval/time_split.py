@@ -156,7 +156,8 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
         return nudge
     if name.startswith("ease+sasrec:"):  # "ease+sasrec:<gamma>": needs a sasrec run on the same set first
         part = "test" if systems.cache.get("set") == "test" else "val"
-        path = sorted(RESULTS.glob(f"*-sasrec-{part}.json"))[-1]
+        tag = "" if CUTOFF == "2022-01-01" else CUTOFF[:4] + "-"
+        path = sorted(RESULTS.glob(f"*-sasrec-{tag}{part}.json"))[-1]
         shown = {e["user"]: frozenset(e["visible"]) for e in systems.cache["entries"]}
         top = {shown[u["user"]]: u["top100"] for u in json.loads(path.read_text(encoding="utf-8"))["rows"][0]["per_user"]}
         print(f"  SASRec candidates from {path.name}", flush=True)
@@ -179,6 +180,14 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
         return RecentNudge(systems.get("ease"), dict(zip(ids.tolist(), counts.tolist())), float(name.split(":")[1]),
                            fallback=systems.popularity.ranking)
     return systems.get(name)
+
+
+def use_cutoff(cutoff: str) -> None:
+    """Another deployment date: its own frozen split and holdout files (eval/sasrec.py --cutoff reads them too)."""
+    global CUTOFF, TIME_SPLIT_PATH, HOLDOUT_PATH
+    CUTOFF = cutoff
+    TIME_SPLIT_PATH = ROOT / "eval" / f"time_split_{cutoff[:4]}.json"
+    HOLDOUT_PATH = ROOT / "eval" / f"time_holdout_{cutoff[:4]}.json"
 
 
 def load_groups() -> dict:
@@ -210,10 +219,7 @@ def main() -> None:
 
     users, apps, hours, dates = positive_dates()
     if args.cutoff:
-        global CUTOFF, TIME_SPLIT_PATH, HOLDOUT_PATH
-        CUTOFF, year = args.cutoff, args.cutoff[:4]
-        TIME_SPLIT_PATH = ROOT / "eval" / f"time_split_{year}.json"
-        HOLDOUT_PATH = ROOT / "eval" / f"time_holdout_{year}.json"
+        use_cutoff(args.cutoff)
         world = dates < np.datetime64(CUTOFF) + np.timedelta64(365, "D")
         users, apps, hours, dates = users[world], apps[world], hours[world], dates[world]
     if args.make:

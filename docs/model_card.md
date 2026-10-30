@@ -47,6 +47,7 @@ from a paired bootstrap over users.
 | next year's likes, 1,000 test users | 0.064 | **0.087** |
 | the same, a holdout group of 1,000 kept out of everything | 0.070 | **0.095** (+0.016 to +0.035) |
 | the same test users shown only their latest 3 games | 0.050 | **0.063** |
+| deployed a year earlier (2021 likes hidden), 1,000 test users | 0.063 | **0.088** (+0.016 to +0.034) |
 | a random 20% of each library hidden (EASE alone, 1,000 users) | 0.172 | |
 
 For scale: popularity finds 0.021 to 0.026 on the same next-year tasks. The random split's numbers are more than

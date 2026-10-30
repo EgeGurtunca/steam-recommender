@@ -293,21 +293,25 @@ rather than "worse".
 Every time split number so far comes from one deployment date, the start of 2022. To see if "order helps" was
 that year's luck, I froze a second split as if deployed at the start of 2021 (`--cutoff 2021-01-01`,
 [eval/time_split_2021.json](../eval/time_split_2021.json)): training on likes before it, 2,000 new users whose
-2021 likes are hidden, everything after 2021 dropped. Nothing was tuned again: `ease+markov:3` is the setting
-chosen on 2022's val.
+2021 likes are hidden, everything after 2021 dropped. Nothing was tuned again: every setting is the one chosen on
+2022's val (transitions at 3; SASRec at 128 dimensions, 3 epochs, nudge 3), and SASRec was retrained on 2021's
+training users (two runs, about four minutes each).
 
-| 2021 cutoff | val recall@10 | test recall@10 | both groups (2,000 users) |
+| 2021 cutoff | val recall@10 | test recall@10 | test gap vs EASE, 95% interval |
 |---|---|---|---|
 | popularity | 0.030 | 0.026 | |
-| EASE | 0.061 | 0.063 | 0.062 |
-| transitions alone | 0.069 | 0.063 | |
-| EASE nudged by transitions | 0.073 | 0.070 | 0.072 |
-| gap, 95% interval | +0.013 (+0.005 to +0.020) | +0.007 (-0.001 to +0.015) | **+0.010 (+0.004 to +0.015)** |
+| EASE | 0.061 | 0.063 | |
+| transitions alone | 0.069 | 0.063 | -0.000 (-0.009 to +0.009) |
+| EASE nudged by transitions | 0.073 | 0.070 | +0.007 (-0.001 to +0.015) |
+| SASRec | 0.088 | 0.087 | +0.024 (+0.014 to +0.035) |
+| **EASE nudged by SASRec (the page)** | 0.092 | **0.088** | +0.025 (+0.016 to +0.034) |
 
-Since no setting was picked on either 2021 group, both are fresh for this question and can be pooled: order
-finds 16% more than EASE in 2021, against 14% in 2022. The test group alone falls just short of a clear gap,
-which is the honest size of one thousand users. SASRec was not retrained for 2021 (it needs the GPU); the
-claim checked here is the order-aware nudge the page falls back to.
+The page's pair finds 40% more than EASE in 2021, against 38% in 2022, and its val gap is just as clear
+(+0.031, +0.022 to +0.041). The transitions' gain is smaller and its test interval just touches zero; since no
+setting was picked on either 2021 group, both are fresh and can be pooled: +0.010 (+0.004 to +0.015) on 2,000
+users, 16% against 14% in 2022. One thing did not repeat: in 2022 the pair beat SASRec alone (+0.010), in 2021
+they tie (+0.000, -0.007 to +0.007). So the claim that holds across years is "a model that reads order beats
+one that does not, by about two fifths"; whether EASE adds to SASRec depends on the year.
 
 ### An 8 MB EASE finds the same as the 447 MB one
 

@@ -165,7 +165,7 @@ for, how well it does and where it falls short is summed up in its [model card](
 - [With only three games shown, the same order holds.](docs/findings.md#with-three-games-the-order-still-holds)
 - [A rerank for variety cost nothing measurable, so the page uses it.](docs/findings.md#variety-cost-nothing-measurable)
 - [LightGCN, a graph neural network, landed below EASE and level with ALS.](docs/findings.md#a-graph-neural-network-did-not-beat-ease-either)
-- [Deployed a year earlier (2021), order still helps: 16% more than EASE on 2,000 fresh users.](docs/findings.md#order-helped-in-2021-too)
+- [Deployed a year earlier (2021), the page's EASE + SASRec again finds two fifths more than EASE.](docs/findings.md#order-helped-in-2021-too)
 - [Each game's 200 largest weights in float16 (8 MB, not 447) find the same as the full EASE.](docs/findings.md#an-8-mb-ease-finds-the-same-as-the-447-mb-one)
 
 **New games**
@@ -275,7 +275,6 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 - A Telegram bot in front of the same engine
 - Once people use the page: team-draft interleaving between two rankers (one list mixed from both, credit to the
   one whose games get clicked), the online test stores use with few users, with "Not for me" as the negative
-- SASRec retrained for the 2021 cutoff (the transitions result already held there)
 - For new releases, reviewers with more of their library: per-game review sampling gives each reviewer a
   handful of links, which the fresh eval shows is not enough to beat tags
 
