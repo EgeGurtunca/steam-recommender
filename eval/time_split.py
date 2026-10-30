@@ -17,7 +17,7 @@ from datetime import datetime
 
 import numpy as np
 
-from eval.metrics import recall_at_k
+from eval.metrics import diversify, recall_at_k, tag_diversity
 from eval.run_eval import RESULTS, Systems, evaluate, table
 from recs.core import top_up
 from recs.data import ROOT, build_interactions, load_catalog, load_positive_dates as positive_dates
@@ -29,18 +29,23 @@ from recs.split import load_split, save_split
 
 CUTOFF = "2022-01-01"
 TIME_SPLIT_PATH = ROOT / "eval" / "time_split.json"
+# a third group, frozen after 13 systems had seen the test set: kept out of every training run, scored once for
+# the headline claim (EASE + SASRec over EASE)
+HOLDOUT_PATH = ROOT / "eval" / "time_holdout.json"
+SASREC_TIME = ROOT / "data" / "build" / "sasrec_time.npz"  # eval/sasrec.py --save, trained on this split's training
 RECENT_DAYS = 30  # "lately": the best window for recent popularity on val (30, 90, 180 tried)
 
 
 def make_time_split(users: np.ndarray, apps: np.ndarray, hours: np.ndarray, dates: np.ndarray, cutoff: str = CUTOFF,
                     n_val: int = 1000, n_test: int = 1000, min_before: int = 8, min_after: int = 2,
-                    seed: int = 42) -> dict:
-    """users sorted. Eligible: at least min_before positives before the cutoff and min_after on or after it."""
+                    seed: int = 42, exclude: frozenset = frozenset()) -> dict:
+    """users sorted. Eligible: at least min_before positives before the cutoff and min_after on or after it, and
+    not in `exclude` (users another group already holds)."""
     rng = np.random.default_rng(seed)
     after = dates >= np.datetime64(cutoff)
     ids, starts, counts = np.unique(users, return_index=True, return_counts=True)
     n_after = np.add.reduceat(after.astype(int), starts)
-    eligible = np.flatnonzero((counts - n_after >= min_before) & (n_after >= min_after))
+    eligible = np.flatnonzero((counts - n_after >= min_before) & (n_after >= min_after) & ~np.isin(ids, list(exclude)))
     picked = rng.choice(eligible, size=n_val + n_test, replace=False)
     out = {"val": [], "test": []}
     for n, i in enumerate(picked):
@@ -74,6 +79,29 @@ def by_recency(entries: list[dict], liked_on: dict, half_life: float, cutoff: st
     end = np.datetime64(cutoff)
     return [{**e, "visible": {a: 0.5 ** ((end - liked_on[(e["user"], a)]).astype(int) / half_life) for a in e["visible"]}}
             for e in entries]
+
+
+class SasrecAlone:
+    """SASRec on its own; the library's values are recency weights (by_recency), which give it the order."""
+    name = "sasrec"
+
+    def __init__(self, model, fallback=()):
+        self.model, self.fallback = model, fallback
+
+    def recommend(self, library, k: int = 10) -> list[int]:
+        return top_up(self.model.ranking(sorted(library, key=library.get), k), self.fallback, library, k)
+
+
+class Diverse:
+    """Any system's top 60, picked again for tag variety (eval.metrics.diversify)."""
+
+    def __init__(self, base, tags: dict, lam: float, fallback=()):
+        self.base, self.tags, self.lam, self.fallback = base, tags, lam, fallback
+        self.name = f"{base.name} div:{lam:g}"
+
+    def recommend(self, library, k: int = 10) -> list[int]:
+        ranked = self.base.ranking(library, 60) if hasattr(self.base, "ranking") else self.base.recommend(library, 60)
+        return top_up(diversify(ranked, self.tags, self.lam, k), self.fallback, library, k)
 
 
 class SavedSasrec:
@@ -116,6 +144,16 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
             return systems.cache["markov"]
         return MarkovNudge(systems.get("ease"), systems.cache["markov"], float(name.split(":")[1]),
                            fallback=systems.popularity.ranking)
+    if name == "sasrec" or name.startswith("ease+sasrec-np:"):  # numpy SASRec trained on this split's training
+        if "sasrec_np" not in systems.cache:
+            from recs.sasrec_np import SASRec
+            systems.cache["sasrec_np"] = SASRec(SASREC_TIME)
+        model = systems.cache["sasrec_np"]
+        if name == "sasrec":
+            return SasrecAlone(model, fallback=systems.popularity.ranking)
+        nudge = SasrecNudge(systems.get("ease"), model, float(name.split(":")[1]), fallback=systems.popularity.ranking)
+        nudge.name = name
+        return nudge
     if name.startswith("ease+sasrec:"):  # "ease+sasrec:<gamma>": needs a sasrec run on the same set first
         part = "test" if systems.cache.get("set") == "test" else "val"
         path = sorted(RESULTS.glob(f"*-sasrec-{part}.json"))[-1]
@@ -134,13 +172,28 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
     return systems.get(name)
 
 
+def load_groups() -> dict:
+    """val and test, plus the holdout group once it exists."""
+    groups = load_split(TIME_SPLIT_PATH)
+    return groups | load_split(HOLDOUT_PATH) if HOLDOUT_PATH.exists() else groups
+
+
+def latest(entries: list[dict], liked_on: dict, n: int) -> list[dict]:
+    """The same users shown only their n most recently liked games: a new account, as the page often gets."""
+    return [{**e, "visible": dict(sorted(e["visible"].items(), key=lambda kv: liked_on[(e["user"], kv[0])])[-n:])}
+            for e in entries]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--make", action="store_true")
-    ap.add_argument("--set", choices=["val", "test"], default="val")
+    ap.add_argument("--make-holdout", action="store_true")
+    ap.add_argument("--set", choices=["val", "test", "holdout"], default="val")
+    ap.add_argument("--last", type=int, help="show each user only their latest N liked games")
+    ap.add_argument("--diversify", type=float, help="pick each system's top 60 again for tag variety (lambda)")
     ap.add_argument("--systems", default="popularity,content,als,ease",
                     help="also pop-recent:<days>, ease-decay:<half-life days>, ease+recent:<beta>, "
-                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>")
+                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, ease+sasrec-np:<gamma>")
     args = ap.parse_args()
 
     users, apps, hours, dates = positive_dates()
@@ -151,36 +204,50 @@ def main() -> None:
             raise SystemExit(str(e))
         print(f"wrote {TIME_SPLIT_PATH}")
         return
+    if args.make_holdout:
+        taken = frozenset(e["user"] for part in load_split(TIME_SPLIT_PATH).values() for e in part)
+        group = make_time_split(users, apps, hours, dates, n_val=1000, n_test=0, seed=7, exclude=taken)["val"]
+        try:
+            save_split({"holdout": group}, HOLDOUT_PATH)
+        except FileExistsError as e:
+            raise SystemExit(str(e))
+        print(f"wrote {HOLDOUT_PATH}")
+        return
 
-    split = load_split(TIME_SPLIT_PATH)
+    split = load_groups()
     eval_users = {e["user"] for part in split.values() for e in part}
     before = dates < np.datetime64(CUTOFF)
     keep = before & ~np.isin(users, list(eval_users))
     train = build_interactions(users[keep], apps[keep], hours[keep], exclude_users=set())
     systems = Systems(train, load_catalog())
     pop_rank = {app: i + 1 for i, app in enumerate(systems.popularity.ranking)}
-    entries = split[args.set]
+    mine = np.isin(users, list(eval_users))
+    liked_on = dict(zip(zip(users[mine].tolist(), apps[mine].tolist()), dates[mine]))
+    entries = split[args.set] if not args.last else latest(split[args.set], liked_on, args.last)
     systems.cache.update({"set": args.set, "entries": entries})  # ease+sasrec finds its own run by these
     hidden = [a for e in entries for a in e["hidden"]]
     unknown = sum(a not in train.item_index for a in hidden) / len(hidden)
     print(f"trained on positives before {CUTOFF}: {train.matrix.shape[0]} users x {train.matrix.shape[1]} games; "
           f"{unknown:.0%} of the hidden games are unknown to training (released or first liked later)", flush=True)
     rows = []
-    mine = np.isin(users, list(eval_users))
-    liked_on = dict(zip(zip(users[mine].tolist(), apps[mine].tolist()), dates[mine]))
     for name in args.systems.split(","):
         shown = (by_recency(entries, liked_on, float(name.split(":")[1])) if name.startswith("ease-userdecay:")
-                 else by_recency(entries, liked_on, HALF_LIFE) if "markov" in name else entries)
-        rows.append(evaluate(build(name, systems, users, apps, hours, dates, keep), shown, pop_rank))
+                 else by_recency(entries, liked_on, HALF_LIFE) if "markov" in name or "sasrec" in name else entries)
+        system = build(name, systems, users, apps, hours, dates, keep)
+        if args.diversify is not None:
+            system = Diverse(system, systems.catalog.tags, args.diversify, fallback=systems.popularity.ranking)
+        rows.append(evaluate(system, shown, pop_rank))
         print(f"  {name}: recall@10 {rows[-1]['recall@10']:.3f}", flush=True)
     print(f"time split, {args.set}, {len(entries)} users")
     print(table(rows))
+    for r in rows:
+        print(f"{r['system']}: tag diversity {tag_diversity([u['recs'] for u in r['per_user']], systems.catalog.tags):.3f}")
     for r in rows:  # the same, counting only hidden games training has seen: what no model could find is left out
         known = [recall_at_k(u["recs"], [a for a in u["hidden"] if a in train.item_index]) for u in r["per_user"]
                  if any(a in train.item_index for a in u["hidden"])]
         print(f"{r['system']}: recall@10 {sum(known) / len(known):.3f} on games training knows ({len(known)} users)")
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time-{args.set}.json"
+    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time-{args.set}{f'-last{args.last}' if args.last else ''}.json"
     out.write_text(json.dumps({"args": vars(args), "rows": rows}), encoding="utf-8")
     print(f"per-user results: {out}")
 

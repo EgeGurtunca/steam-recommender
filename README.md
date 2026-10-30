@@ -16,7 +16,7 @@ Below is how much, how sure, and why that is still useful to know.
 |---|---|
 | Which model finds the 20% of a library hidden from it? | EASE 0.172, ALS 0.143, popularity 0.048 (EASE over ALS: +0.017 to +0.042) |
 | Does a local LLM reranking ALS help? | No: 0.149 against 0.160 (-0.038 to +0.015), 5,000 times slower |
-| Which predicts what a player likes next year? | EASE + SASRec 0.088, EASE 0.064 (+0.015 to +0.033); every number less than half the random split's |
+| Which predicts what a player likes next year? | EASE + SASRec 0.088, EASE 0.064 (+0.015 to +0.033), and again on 1,000 untouched users: 0.095 against 0.070 |
 | How much data does a new game need? | A week of reviews: 0.052, three times its tags (0.016) |
 | Do co-likes beat tags for 2025 releases? | Not with reviews collected game by game: 0.077 against 0.085 (-0.035 to +0.016) |
 
@@ -245,6 +245,50 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   that pair without torch: [recs/sasrec_np.py](recs/sasrec_np.py) is the same forward pass in numpy, trained
   once on every positive (`python -m eval.sasrec --page`), and gives torch's top 10 for every checked library
   (largest score difference 6e-6) in 0.03 s.
+- **The headline held on users no system had seen.** By then 13 systems had been scored once each on the
+  time split's test set; picking the best of 13 on one set flatters the winner. So I froze a third group of
+  1,000 users ([eval/time_holdout.json](eval/time_holdout.json)), retrained everything without them, checked
+  the new pipeline on val first, and scored them once:
+
+  | holdout, 1000 users | recall@10 | gap vs EASE, 95% interval |
+  |---|---|---|
+  | popularity | 0.026 | |
+  | EASE | 0.070 | |
+  | EASE + transitions | 0.084 | +0.014 (+0.006 to +0.022) |
+  | SASRec | 0.084 | +0.014 (+0.004 to +0.024) |
+  | **EASE + SASRec** | **0.095** | +0.025 (+0.016 to +0.035) |
+
+  Same order, same size of gap: EASE + SASRec finds 36% more than EASE, and beats SASRec alone again (+0.011,
+  +0.004 to +0.019).
+- **With three games, the order still holds.** The page often gets a new account, but every eval user had at
+  least eight liked games. Shown only their latest three or five (`--last N`), the same test users give:
+
+  | test | latest 3 games | latest 5 | whole library |
+  |---|---|---|---|
+  | popularity | 0.021 | 0.021 | 0.021 |
+  | EASE | 0.050 | 0.055 | 0.064 |
+  | EASE + transitions | 0.060 | 0.066 | 0.073 |
+  | SASRec | 0.058 | 0.066 | 0.075 |
+  | EASE + SASRec | **0.063** | **0.072** | **0.087** |
+
+  (SASRec here was retrained without the holdout group, hence 0.075 for the whole library against 0.078
+  above.) Three games already find two to three times what popularity does, and the pair stays on top
+  (+0.013 over EASE with three games, +0.006 to +0.020). A short library costs less than I expected: the
+  latest three games give three quarters of what the whole library gives.
+- **Variety cost nothing measurable.** The demo's top ten held three Souls games. Stores rerank for variety;
+  the usual way is maximal marginal relevance: pick the list one game at a time, weighing its place in the
+  ranking (lambda) against its tag overlap with the games already picked (`diversify` in
+  [recs/core.py](recs/core.py), `--diversify` in the time split eval). For EASE + SASRec:
+
+  | lambda | val recall@10 | test recall@10 | tag variety, test (1 - mean overlap) | gap vs none, test |
+  |---|---|---|---|---|
+  | 1 (none) | 0.089 | 0.087 | 0.979 | |
+  | 0.8 | 0.087 | 0.086 | 0.988 | -0.001 (-0.003 to +0.001) |
+  | 0.6 | 0.084 | | 0.995 on val | -0.005 on val (-0.009 to -0.001) |
+
+  At 0.8 the loss is inside the noise on both sets: on the demo, Dark Souls Remastered makes way for
+  Satisfactory and Dark Souls II moves down. Most lists are already varied, which is why the
+  measure starts near 1; the rerank matters for the libraries that are not.
 - **A graph neural network did not beat EASE either.** Stores describe their recommenders as graphs of who
   played what, so I trained LightGCN (He et al., 2020) on the same likes before the cutoff
   ([eval/lightgcn.py](eval/lightgcn.py)): game and player embeddings smoothed over three hops of the like graph,
@@ -457,8 +501,8 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-77 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen splits (random and in time), the metrics and their bootstrap intervals, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
+79 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 

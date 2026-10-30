@@ -104,3 +104,11 @@ def test_fresh_holds_out_reviewers_and_hides_only_their_new_games():
                3: {10: 5.0, 11: 3.0}}  # nothing new: nothing to find
     split = pick(by_user, new={99}, known={10, 11}, n=1)
     assert split["val"] == [] and split["test"] == [{"user": 1, "visible": {10: 5.0, 11: 3.0}, "hidden": [99]}]
+
+
+def test_latest_keeps_only_the_most_recently_liked_games():
+    from eval.time_split import latest
+    entries = [{"user": 1, "visible": {10: 1.0, 11: 2.0, 12: 3.0}, "hidden": [13]}]
+    liked_on = {(1, 10): np.datetime64("2021-03-01"), (1, 11): np.datetime64("2019-01-01"),
+                (1, 12): np.datetime64("2021-06-01")}
+    assert latest(entries, liked_on, 2) == [{"user": 1, "visible": {10: 1.0, 12: 3.0}, "hidden": [13]}]

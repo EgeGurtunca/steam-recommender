@@ -33,3 +33,10 @@ def test_paired_bootstrap_brackets_the_mean_gap():
     assert same == (0.0, 0.0, 0.0)
     gap, lo, hi = metrics.paired_bootstrap([0.0] * 50 + [0.5] * 50, [0.5] * 100)
     assert math.isclose(gap, 0.25) and 0 < lo < 0.25 < hi
+
+
+def test_diversify_trades_rank_for_variety_and_diversity_measures_it():
+    tags = {1: ["Souls-like", "RPG"], 2: ["Souls-like", "RPG"], 3: ["Puzzle"], 4: ["Souls-like"]}
+    assert metrics.diversify([1, 2, 3, 4], tags, lam=1.0, k=3) == [1, 2, 3]  # lam 1: the ranking as it was
+    assert metrics.diversify([1, 2, 3, 4], tags, lam=0.5, k=2) == [1, 3]  # a second Souls game loses to a puzzle
+    assert metrics.tag_diversity([[1, 2]], tags) == 0.0 and metrics.tag_diversity([[1, 3]], tags) == 1.0

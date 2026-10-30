@@ -3,6 +3,8 @@ import math
 
 import numpy as np
 
+from recs.core import diversify, jaccard  # noqa: F401  (diversify lives with the page's code)
+
 
 def recall_at_k(recs: list[int], hidden: list[int], k: int = 10) -> float:
     """Hidden games found in the top k, out of the most that could fit there."""
@@ -44,3 +46,11 @@ def paired_bootstrap(base: list[float], other: list[float], n: int = 10000, seed
     means = d[np.random.default_rng(seed).integers(0, len(d), (n, len(d)))].mean(axis=1)
     lo, hi = np.percentile(means, [2.5, 97.5])
     return float(d.mean()), float(lo), float(hi)
+
+
+def tag_diversity(all_recs: list[list[int]], tags: dict, top: int = 5) -> float:
+    """1 minus the mean tag overlap (Jaccard over each game's first `top` tags) between two picks of one list."""
+    pairs = [jaccard(tags.get(a, [])[:top], tags.get(b, [])[:top])
+             for recs in all_recs for i, a in enumerate(recs) for b in recs[i + 1:]]
+    return 1 - sum(pairs) / len(pairs) if pairs else 0.0
+

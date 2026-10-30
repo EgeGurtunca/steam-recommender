@@ -31,12 +31,11 @@ def bucket(hours: np.ndarray) -> np.ndarray:
 
 def export(everything: bool = False) -> None:
     """The time split's training sequences and eval users, or with everything=True every positive (the page)."""
-    from eval.time_split import CUTOFF, TIME_SPLIT_PATH
+    from eval.time_split import CUTOFF, load_groups
     from recs.data import load_positive_dates
-    from recs.split import load_split
 
     users, apps, hours, dates = load_positive_dates()
-    split = {} if everything else load_split(TIME_SPLIT_PATH)
+    split = {} if everything else load_groups()  # val, test and the holdout group all stay out of training
     eval_users = {e["user"] for part in split.values() for e in part}
     keep = np.ones(len(users), bool) if everything else (dates < np.datetime64(CUTOFF)) & ~np.isin(users, list(eval_users))
     item_ids = np.unique(apps[keep])
