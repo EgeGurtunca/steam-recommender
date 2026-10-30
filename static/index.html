@@ -36,6 +36,7 @@
   .card div { padding: 9px 11px; }
   .card b { display: block; font-size: 14px; }
   .card small { color: var(--muted); }
+  .because { display: block; margin-top: 4px; color: #8fb8de; }
   .reason { color: #c9d4e0; font-size: 13px; margin: 6px 0 0; font-style: italic; }
   .hidden { display: none; }
   .sliders { display: flex; gap: 22px; flex-wrap: wrap; margin: 0 0 14px; color: var(--muted); font-size: 13px; }
@@ -49,7 +50,7 @@
   <h1>Steam Taste</h1>
   <p class="sub">Paste your Steam profile link. Your game details must be public. Nothing is stored. Or type <code>demo</code> for a made-up library.</p>
   <form id="form">
-    <input id="link" placeholder="https://steamcommunity.com/id/yourname" autocomplete="off">
+    <input id="link" aria-label="Steam profile link, or demo" placeholder="https://steamcommunity.com/id/yourname" autocomplete="off">
     <button>Show my taste</button>
   </form>
   <p id="status"></p>
@@ -68,7 +69,7 @@
       <div class="cards" id="next"></div></section>
     <section><h2>New since 2024 that fit your tags</h2><div class="cards" id="new"></div></section>
   </div>
-  <footer>Recommendations: EASE trained on 41M public Steam reviews (to 2022) and an October 2026 store catalogue. Not affiliated with Valve.</footer>
+  <footer>Play next: EASE plus the order you played in, learned from 41M public Steam reviews (to 2022); new games: tags and reviews from an October 2026 store catalogue. Not affiliated with Valve.</footer>
 </main>
 <div class="tip" id="tip"></div>
 <script>
@@ -159,7 +160,12 @@ function cards(id, games) {
     const b = document.createElement("b"); b.textContent = g.title;
     const s = document.createElement("small"); s.textContent = [g.year, g.tags.join(", ")].filter(Boolean).join(" · ");
     if (g.positive) s.title = g.positive.toLocaleString("en") + " positive reviews";
-    d.append(b, s); a.append(img, d); return a;
+    d.append(b, s);
+    if (g.because) {  // the played game with the biggest say in this pick (EASE's score is a sum over the library)
+      const w = document.createElement("small"); w.className = "because"; w.textContent = "Because you played " + g.because;
+      d.append(w);
+    }
+    a.append(img, d); return a;
   }));
 }
 

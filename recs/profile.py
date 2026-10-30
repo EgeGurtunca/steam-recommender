@@ -104,9 +104,8 @@ def new_releases(library: Library, store: dict, since: str = "2024-01-01", k: in
 
 def main(link: str) -> None:
     from recs import steam
-    from recs.data import BUILD_DIR, build_interactions, load_catalog, load_positives, load_store
+    from recs.data import BUILD_DIR, load_catalog, load_store
     from recs.ease import EASE
-    from recs.popularity import Popularity
 
     lib, store, catalog = steam.load_library(link), load_store(), load_catalog()
     played = {a: h for a, h in lib.games.items() if h >= 2}
@@ -114,13 +113,7 @@ def main(link: str) -> None:
     print(f"{len(lib.games)} games, {len(played)} played for 2 hours or more\n\nYour taste:")
     for t, share in taste_profile(played, store, weights=weights):
         print(f"  {t:<24} {'#' * round(share * 100)} {share:.0%}")
-    cache = BUILD_DIR / "ease"
-    if (cache / "b.npy").exists():
-        ease = EASE.load(cache)
-    else:
-        train = build_interactions(*load_positives(), exclude_users=set())
-        ease = EASE(train, lam=500, fallback=Popularity(train).ranking)
-        ease.save(cache)
+    ease = EASE.load_or_build(BUILD_DIR / "ease")
     from recs.web import next_picks, page_ranker
     _, picks = next_picks(lib, store, page_ranker(ease))  # as the page ranks
     split = social_split(played, store)

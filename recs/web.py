@@ -9,12 +9,14 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from recs import profile, sequence, steam
+from recs.core import diversify
 from recs.data import BUILD_DIR, ROOT, Catalog
 
 PAGE = ROOT / "static" / "index.html"
 HEADER = "https://cdn.cloudflare.steamstatic.com/steam/apps/{app}/header.jpg"
 TASTE_TAGS = 16
 CANDIDATES = 60  # EASE's top 60 go to the page, which re-sorts them with the popular/niche and older/newer sliders
+DIVERSITY = 0.8  # tag variety in that order (recs.core.diversify): no recall lost on the time split, val or test
 # "demo" in the link box: a made-up library, so the page can be tried (and shown) without a Steam key or anyone's profile
 DEMO = steam.SteamLibrary("demo", {620: 40.0, 105600: 310.0, 413150: 120.0, 367520: 65.0, 292030: 140.0, 489830: 90.0,
                                    1145360: 55.0, 504230: 25.0, 646570: 180.0, 588650: 45.0, 427520: 260.0,
@@ -35,6 +37,13 @@ def card(app: int, store: dict, catalog: Catalog) -> dict:
 def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weights: dict | None = None) -> dict:
     weights = weights or profile.idf(store)
     played, picks = next_picks(lib, store, ranker, CANDIDATES)
+    tags = {a: store.get(a, {}).get("tags") or catalog.tags.get(a, []) for a in picks}
+    picks = diversify(picks, tags, DIVERSITY, len(picks))
+    # "because you played X": the biggest term in EASE's sum for each pick (the page's rankers all start from EASE)
+    ease = getattr(ranker, "ease", ranker)
+    why = ease.because(played, picks) if hasattr(ease, "because") else {}
+    because = {a: {"because": lib.titles.get(b) or catalog.titles.get(b) or store.get(b, {}).get("title", str(b))}
+               for a, b in why.items()}
     taste = {}
     for name, library in (("all", played), ("recent", lib.recent)):
         top = profile.taste_profile(library, store, top=TASTE_TAGS, weights=weights)
@@ -46,7 +55,8 @@ def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weig
             "taste": taste, "edges": [{"a": a, "b": b, "w": w} for a, b, w in profile.tag_edges(tags, store)],
             "split": profile.social_split(played, store),
             "top_played": [{"title": lib.titles.get(a, str(a)), "hours": h} for a, h in top_played],
-            "next": [card(a, store, catalog) for a in picks], "new": [card(a, store, catalog) for a in new]}
+            "next": [card(a, store, catalog) | because.get(a, {}) for a in picks],
+            "new": [card(a, store, catalog) for a in new]}
 
 
 def recency(lib: steam.SteamLibrary, played: dict, now: float | None = None) -> dict[int, float]:
@@ -119,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(body).encode(), "application/json")
         except (ValueError, steam.PrivateLibrary) as e:
             return self.send(400, json.dumps({"error": str(e)}).encode(), "application/json")
+        except steam.SteamUnavailable as e:
+            return self.send(502, json.dumps({"error": str(e)}).encode(), "application/json")
 
     def log_message(self, *args):  # quiet: one line per request is noise here
         pass
@@ -140,9 +152,9 @@ def page_ranker(ease):
 def main(port: int = 8000) -> None:
     from recs.data import BUILD_DIR, load_catalog, load_store
     from recs.ease import EASE
-    print("loading the store catalogue and the EASE weights...")
+    print("loading the store catalogue and the EASE weights (trained the first time, about 20 s)...")
     store = load_store()
-    Handler.state = {"store": store, "catalog": load_catalog(), "ranker": page_ranker(EASE.load(BUILD_DIR / "ease")),
+    Handler.state = {"store": store, "catalog": load_catalog(), "ranker": page_ranker(EASE.load_or_build(BUILD_DIR / "ease")),
                      "weights": profile.idf(store)}
     print(f"open http://127.0.0.1:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

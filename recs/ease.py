@@ -32,6 +32,19 @@ class EASE:
         np.save(Path(folder) / "items.npy", self.item_ids)
 
     @classmethod
+    def load_or_build(cls, folder) -> "EASE":
+        """The page's weights: trained on every positive the first time (about 20 s), then loaded."""
+        from pathlib import Path
+        from recs import data
+        from recs.popularity import Popularity
+        if (Path(folder) / "b.npy").exists():
+            return cls.load(folder)
+        train = data.build_interactions(*data.load_positives(), exclude_users=set())
+        ease = cls(train, fallback=Popularity(train).ranking)
+        ease.save(folder)
+        return ease
+
+    @classmethod
     def load(cls, folder, fallback: Sequence[int] = ()) -> "EASE":
         from pathlib import Path
         e = cls.__new__(cls)
@@ -50,6 +63,15 @@ class EASE:
         scores = np.asarray([w.get(a, 1.0) for a in apps], dtype=np.float32) @ self.b[cols]
         scores[cols] = -np.inf
         return scores
+
+    def because(self, library: Library, picks: list[int]) -> dict[int, int]:
+        """For each pick, the owned game with the biggest term in its score: "because you played X", exact and
+        free, since a score is a sum over the library. Picks EASE does not know get no entry."""
+        owned = [a for a in library if a in self.index]
+        if not owned:
+            return {}
+        rows = self.b[[self.index[a] for a in owned]]
+        return {p: owned[int(np.argmax(rows[:, self.index[p]]))] for p in picks if p in self.index}
 
     def ranking(self, library: Library, n: int) -> list[int]:
         scores = self.scores(library)

@@ -3,6 +3,7 @@ user's data only when that user asks). Needs STEAM_API_KEY in .env; nothing read
 import json
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -37,16 +38,30 @@ def parse_profile(link: str) -> tuple[str, str]:
     return ("vanity" if m.group(1) == "id" else "id"), m.group(2)
 
 
+class SteamUnavailable(Exception):
+    """Steam did not answer (network down, timeout, a 5xx)."""
+
+
 def api_key() -> str:
     for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines() if (ROOT / ".env").exists() else []:
         if line.startswith("STEAM_API_KEY="):
             return line.split("=", 1)[1].strip()
+    if "STEAM_API_KEY" not in os.environ:
+        raise ValueError("no Steam API key: put STEAM_API_KEY=... in .env (or type demo for a made-up library)")
     return os.environ["STEAM_API_KEY"]
 
 
 def http_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=30) as r:
-        return json.load(r)
+    """The URL holds the API key, so no error raised here may include it (urllib's own errors do)."""
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code < 500:  # Steam refuses the request: almost always an id that does not exist
+            raise ValueError(f"Steam answered {e.code} for this profile: check the link") from None
+        raise SteamUnavailable(f"Steam answered {e.code}, try again in a minute") from None
+    except (urllib.error.URLError, TimeoutError):
+        raise SteamUnavailable("Steam is not answering, try again in a minute") from None
 
 
 def load_library(link: str, key: str | None = None, get: Callable[[str], dict] = http_json) -> SteamLibrary:

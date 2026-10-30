@@ -163,3 +163,23 @@ def test_recent_nudge_moves_up_what_was_liked_lately():
 
     assert RecentNudge(FakeEase(), {3: 1000}, beta=0.0).recommend({}, 3) == [1, 2, 3]
     assert RecentNudge(FakeEase(), {3: 1000}, beta=2.0).recommend({}, 3) == [3, 1, 2]
+
+
+def test_ease_weights_are_built_once_and_then_loaded(tmp_path, monkeypatch):
+    from recs import data
+    from recs.ease import EASE
+    calls = []
+
+    def positives():
+        calls.append(1)
+        return np.array([1, 1, 2, 2, 3]), np.array([10, 11, 10, 11, 10]), np.ones(5)
+    monkeypatch.setattr(data, "load_positives", positives)
+    first = EASE.load_or_build(tmp_path / "ease")
+    second = EASE.load_or_build(tmp_path / "ease")
+    assert calls == [1] and second.recommend({10: 1.0}, 1) == first.recommend({10: 1.0}, 1) == [11]
+
+
+def test_ease_names_the_owned_game_behind_each_pick():
+    from recs.ease import EASE
+    e = EASE(two_groups(), lam=1.0)
+    assert e.because({1: 5.0, 3: 5.0}, [2, 4, 999]) == {2: 1, 4: 3}  # 999 unknown: no reason

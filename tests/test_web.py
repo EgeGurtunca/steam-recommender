@@ -64,3 +64,15 @@ def test_the_ranker_sees_the_latest_played_games_weighing_most():
     lib = SteamLibrary("765", {1: 50.0, 2: 30.0, 9: 1.0}, last_played={1: 1000 * day, 2: 820 * day})
     web.next_picks(lib, STORE, Recording(), now=1000 * day)
     assert seen[1] == 1.0 and abs(seen[2] - 0.5) < 1e-9 and 9 not in seen  # 180 days older: half; under 2 h: out
+
+
+def test_cards_say_which_played_game_led_to_them():
+    class WithEase(FakeRanker):
+        class ease:
+            @staticmethod
+            def because(library, picks):
+                return {2: 1}
+
+    lib = SteamLibrary("765", {1: 50.0}, titles={1: "A"})
+    p = web.payload(lib, STORE, WithEase(), Catalog({1: "A", 2: "B", 3: "Tool"}, {}, {}))
+    assert [(g["app_id"], g.get("because")) for g in p["next"]] == [(2, "A")]

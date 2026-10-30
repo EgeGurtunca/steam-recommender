@@ -286,8 +286,8 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   | 0.8 | 0.087 | 0.086 | 0.988 | -0.001 (-0.003 to +0.001) |
   | 0.6 | 0.084 | | 0.995 on val | -0.005 on val (-0.009 to -0.001) |
 
-  At 0.8 the loss is inside the noise on both sets: on the demo, Dark Souls Remastered makes way for
-  Satisfactory and Dark Souls II moves down. Most lists are already varied, which is why the
+  At 0.8 the loss is inside the noise on both sets, so the page uses it: on the demo, Dark Souls Remastered
+  makes way for Satisfactory and Dark Souls II moves down. Most lists are already varied, which is why the
   measure starts near 1; the rerank matters for the libraries that are not.
 - **A graph neural network did not beat EASE either.** Stores describe their recommenders as graphs of who
   played what, so I trained LightGCN (He et al., 2020) on the same likes before the cutoff
@@ -456,7 +456,10 @@ not obscure. The candidates are EASE nudged by SASRec, the pair that did best on
 library in the order Steam's API gives as each game's last-played time (EASE + transitions if the SASRec weights
 are not there). On the demo library a recent run of Slay the Spire brings Inscryption, Vampire Survivors and
 ULTRAKILL into the top ten; with transitions alone the nudge also lifted the games that were rising in 2021 and
-2022 (Bloons TD 6, Among Us), which SASRec does not. A button
+2022 (Bloons TD 6, Among Us), which SASRec does not. Each card also says which of your games led to it:
+EASE's score is a sum over your library, so its biggest term names the game, exactly and without a model call
+(on the demo, Sekiro because of Dark Souls III, Inscryption because of Slay the Spire). The order is then
+reranked for tag variety (see "Variety cost nothing measurable" above). A button
 asks gemma4 for one line per "play next" card, from the games you played (schema-limited to those ten, in
 the page's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
 still reads correctly. Ollama is started for that request and stopped right after.
@@ -489,7 +492,7 @@ python -m eval.time_split --set val                                 # the time s
 python -m eval.sasrec --export && pip install ".[seq]" && python -m eval.sasrec --set val   # SASRec, wants a GPU
 python -m eval.lightgcn --epochs 40 --batch 131072 --lr 0.01         # LightGCN on the same export, val and test
 python -m eval.explain_eval --set val --users 100   # how grounded the reasons are
-python -m recs.recommend --user <id from eval/split.json>   # ten picks with reasons
+python -m recs.recommend --library lib.json   # the page's picks with gemma4's reasons, no Steam key
 ```
 
 On Windows with more than 24 logical cores, OpenBLAS (as shipped with numpy) crashes inside implicit; the
@@ -501,10 +504,10 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-79 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+84 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 

@@ -32,3 +32,29 @@ def test_private_library_is_a_clear_error():
     get = lambda url: {"response": {}}
     with pytest.raises(steam.PrivateLibrary):
         steam.load_library("76561198000000001", key="k", get=get)
+
+
+def test_steam_errors_become_clear_messages_without_the_key(monkeypatch):
+    import io
+    import urllib.error
+
+    def refuse(url, timeout):
+        raise urllib.error.HTTPError(url, 400, "Bad Request", {}, io.BytesIO())
+    monkeypatch.setattr(steam.urllib.request, "urlopen", refuse)
+    with pytest.raises(ValueError) as e:
+        steam.http_json("https://api.steampowered.com/x/?key=SECRET123&steamid=1")
+    assert "SECRET123" not in str(e.value) and "400" in str(e.value)
+
+    def down(url, timeout):
+        raise urllib.error.URLError("timed out")
+    monkeypatch.setattr(steam.urllib.request, "urlopen", down)
+    with pytest.raises(steam.SteamUnavailable) as e:
+        steam.http_json("https://api.steampowered.com/x/?key=SECRET123")
+    assert "SECRET123" not in str(e.value)
+
+
+def test_a_missing_key_says_what_to_do(monkeypatch, tmp_path):
+    monkeypatch.setattr(steam, "ROOT", tmp_path)  # no .env here
+    monkeypatch.delenv("STEAM_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="STEAM_API_KEY"):
+        steam.api_key()
