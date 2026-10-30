@@ -152,6 +152,7 @@ The short list; each line links to its numbers in [docs/findings.md](docs/findin
 - [gemma4 reordering ALS's picks was at best a tie, 5,000 times slower.](docs/findings.md#gemma4-did-not-beat-the-model-it-was-given)
 - [Alone, gemma4 named titles of which 20% are not in Steam's list; the candidate schema keeps it safe.](docs/findings.md#gemma4-alone-recommends-from-memory-and-memory-is-not-a-catalogue)
 - [So the model ranks and gemma4 explains: 97% of its reasons name a game the player played.](docs/findings.md#so-i-split-the-jobs-als-ranks-gemma4-explains)
+- [On the page's own picks it holds at 96%; it names the card's exact "because" game in 47% of reasons.](docs/findings.md#the-reasons-hold-on-the-pages-own-picks)
 
 **Predicting the next year (the time split)**
 
@@ -167,6 +168,7 @@ The short list; each line links to its numbers in [docs/findings.md](docs/findin
 **New games**
 
 - [Cold start: tags found almost nothing for games the model never saw.](docs/findings.md#cold-start-tags-alone-found-nothing-fresh-tags-times-popularity-found-a-little)
+- [Descriptions (bge-m3) and a description-to-ALS bridge beat tags alone; in a row of new games, tags x popularity wins clearly.](docs/findings.md#descriptions-beat-tags-alone-for-a-row-of-new-games-tags-times-popularity-wins)
 - [Warm start: one week of reviews per new game beats every tag, three times over.](docs/findings.md#warm-start-a-games-first-week-beats-every-tag)
 - [A 2026 store catalogue fills in 2023 to 2026 games (once its broken header is fixed).](docs/findings.md#a-store-catalogue-from-october-2026)
 - [Collected 2025 reviews, authors hashed, were too sparse for co-likes to beat tags.](docs/findings.md#public-store-reviews-anonymised)
@@ -254,8 +256,8 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-87 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
+90 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, the description recommender and its bridge to ALS, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key, one page in under a second, the last two weeks' own picks, play together by least misery), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 

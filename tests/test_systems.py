@@ -183,3 +183,13 @@ def test_ease_names_the_owned_game_behind_each_pick():
     from recs.ease import EASE
     e = EASE(two_groups(), lam=1.0)
     assert e.because({1: 5.0, 3: 5.0}, [2, 4, 999]) == {2: 1, 4: 3}  # 999 unknown: no reason
+
+
+def test_the_bridge_gives_a_game_with_no_players_a_place_among_the_known_ones():
+    from recs.als import ALS
+    from recs.describe import Bridge
+    als = ALS(two_groups(), factors=4, iterations=10)
+    # game 5 has no players; its description reads like game 2's (the group of 1 and 2)
+    vectors = {1: [1.0, 0.0, 0.1], 2: [0.9, 0.1, 0.0], 3: [0.0, 1.0, 0.1], 4: [0.1, 0.9, 0.0], 5: [0.95, 0.05, 0.0]}
+    b = Bridge(als, vectors, alpha=0.01)
+    assert b.recommend({1: 10.0, 2: 10.0}, 1) == [5]

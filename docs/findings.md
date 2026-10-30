@@ -106,6 +106,16 @@ title. Most of those are harmless ("Portal 2 offers..."), but some cite it as if
 reasons did this; telling the model not to cut it to 1, so the code now drops any reason that names the
 game it explains.
 
+### The reasons hold on the page's own picks
+
+The 97% above was measured on ALS's picks. The page now shows EASE + SASRec's, filtered for programs, with the
+self-citing reasons dropped, so I measured again on the same 100 test users (`eval.explain_eval --ranker page`):
+**96%** of the 1000 reasons name a game the player played, 3% came back empty (the ones that only named the game
+they explain, now dropped, where before 14% did), no call failed. Each card also carries the exact line, the game
+with the biggest term in EASE's sum; gemma4 names that same game in 47% of its reasons. The two answer different
+questions: the exact line says what moved the model, gemma4 picks the played game that reads best next to the
+pick, often a closer match in kind than the model's strongest link.
+
 ## Predicting the next year (the time split)
 
 ### Asked to predict the future, every number falls by more than half
@@ -290,6 +300,42 @@ catalogue (130K apps: tags and review counts) and weighted tag similarity by `lo
 validation that went from 0.011 to 0.066; on test it is **0.016**, two users out of 125, with an interval
 that starts at zero (0.000 to 0.040). Barely there, and much smaller than validation promised: the weight was chosen on validation, and with 125 users one hit moves
 recall by 0.008. This is the kind of number a frozen test set exists to catch.
+
+### Descriptions beat tags alone; for a row of new games, tags times popularity wins
+
+Tags describe a game in a few shared words; a description says what it is about. I embedded the title and store
+description of all 10,816 games with bge-m3 through Ollama ([recs/describe.py](../recs/describe.py)), made each
+player the hours-weighted mean of their games' vectors, and ran the cold start test (the 626 new games out of
+training; `desc` and `desc+pop:<beta>` in `eval.run_eval`). I also built the bridge large services use for new
+items: a ridge regression from a game's description to its ALS factors, fit on the games ALS knows, so a game with
+no players gets a place in the collaborative space (`bridge:<alpha>`, the `Bridge` class).
+
+Ranked against the whole catalogue, as the cold start rows above were:
+
+| cold start, recall@10 | val (122 users) | test (125 users) |
+|---|---|---|
+| tags | 0.011 | 0.000 |
+| descriptions | 0.033 | 0.016 |
+| tags x popularity | **0.066** | 0.016 |
+| descriptions x popularity (beta 0.25, best of 0.1 to 2 on val) | 0.041 | **0.036** |
+
+Descriptions find three times what tags find alone, but against tags x popularity the two sets disagree and the
+test gap's interval holds zero (+0.020, -0.012 to +0.052). The bridge changed nothing here: its predicted vectors
+score about a quarter of the known games' best, so a new game never reaches a top ten that holds old ones.
+
+A new game is better judged where the page shows it, in a row of new games only (`--new-only`):
+
+| new games only, recall@10 | val | test | test gap vs tags x popularity |
+|---|---|---|---|
+| tags x popularity | **0.276** | **0.319** | |
+| descriptions x popularity (beta 0.25) | 0.221 | 0.200 | -0.119 (-0.215 to -0.024) |
+| bridge (alpha 1, best of 1 to 100 on val) | 0.175 | 0.124 | -0.195 (-0.277 to -0.108) |
+| descriptions | 0.090 | 0.107 | -0.212 (-0.296 to -0.132) |
+
+Here the answer is clear: among new games, how many players a game has gathered is the strongest signal, and tags
+x popularity uses it. The bridge doubles what descriptions find alone on val, so moving into the collaborative
+space helps, but without popularity it stays behind. The page's "new since 2024" row keeps tags x popularity, now
+with a measurement behind it.
 
 ### Warm start: a game's first week beats every tag
 

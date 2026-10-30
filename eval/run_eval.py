@@ -50,6 +50,17 @@ class Systems:
             c = Content(cat, fallback=self.popularity.ranking, prior={a: v["positive"] for a, v in store.items()}, beta=beta)
             c.name = name
             return c
+        if name.startswith("bridge"):  # "bridge:<alpha>": ALS plus description-predicted factors for unseen games
+            from recs import describe
+            alpha = float(name.split(":")[1]) if ":" in name else 1.0
+            return describe.Bridge(self.get("als"), describe.load(), alpha=alpha, fallback=self.popularity.ranking,
+                                   name=name)
+        if name == "desc" or name.startswith("desc+pop:"):  # descriptions (recs/describe.py), optionally x popularity
+            from recs import describe
+            beta = float(name.split(":")[1]) if ":" in name else 0.0
+            store = load_store()
+            return describe.Described(describe.load(), fallback=self.popularity.ranking, name=name, beta=beta,
+                                      prior={a: v["positive"] for a, v in store.items()})
         if name == "content":
             return Content(self.catalog, fallback=self.popularity.ranking)
         if name == "als":
@@ -75,6 +86,16 @@ class Systems:
         if name == "freeform":
             return FreeFormLLM(self.catalog, all_titles=load_all_titles())
         raise SystemExit(f"unknown system: {name}")
+
+
+class OnlyNew:
+    """A system's ranking cut to the new games, as the page's "new since 2024" row ranks only new games."""
+
+    def __init__(self, base, new_apps: set[int]):
+        self.base, self.new, self.name = base, new_apps, f"{base.name} (new only)"
+
+    def recommend(self, library, k: int = 10) -> list[int]:
+        return [a for a in self.base.recommend(library, 12000) if a in self.new][:k]
 
 
 def evaluate(system, entries: list[dict], pop_rank: dict[int, int]) -> dict:
@@ -115,6 +136,7 @@ def main() -> None:
     ap.add_argument("--users", type=int, default=1000)
     ap.add_argument("--cold-start", action="store_true",
                     help=f"treat games released from {NEW_FROM} as new: out of training, scored alone")
+    ap.add_argument("--new-only", action="store_true", help="with --cold-start: every system picks among new games only")
     args = ap.parse_args()
 
     split = load_split()
@@ -132,7 +154,8 @@ def main() -> None:
 
     names = args.systems.split(",")
     with llm.ollama() if {"rerank", "rerank-als20", "freeform"} & set(names) else nullcontext():
-        rows = [evaluate(systems.get(name), entries, pop_rank) for name in names]
+        pick = (lambda s: OnlyNew(s, new_apps)) if args.new_only else (lambda s: s)
+        rows = [evaluate(pick(systems.get(name)), entries, pop_rank) for name in names]
     for name in names:
         if hasattr(systems.get(name), "failures"):
             print(f"{name}: {systems.get(name).failures} failed LLM calls (fell back)")
