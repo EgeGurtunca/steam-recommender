@@ -45,8 +45,8 @@ The raw files are not in this repo.
 ## The recommenders
 
 All of them implement one function, `recommend(library, k) -> list of app ids`, so the eval and the page can
-call any of them. The first five are scored on the random split below; the last two read a library in order,
-which only the time split can judge.
+call any of them. The first five are scored on the random split below; the last three on the time split, two of them because
+they read a library in order, which only that split can judge.
 
 1. **Popularity** ([recs/popularity.py](recs/popularity.py)): the games most training users liked. The floor.
 2. **Content** ([recs/content.py](recs/content.py)): TF-IDF over the games' Steam tags, a profile weighted by
@@ -65,6 +65,8 @@ which only the time split can judge.
    followed by each other one; a user's latest games say most. It nudges EASE's candidates.
 7. **SASRec** ([eval/sasrec.py](eval/sasrec.py), [recs/sasrec_np.py](recs/sasrec_np.py)): a two-layer causal
    transformer over the last 50 likes, trained in PyTorch on a GPU and run in numpy on the page.
+8. **LightGCN** ([eval/lightgcn.py](eval/lightgcn.py)): a graph neural network over the player-game like graph,
+   as an eval only.
 
 ## Evaluation
 
@@ -229,6 +231,15 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
   that pair without torch: [recs/sasrec_np.py](recs/sasrec_np.py) is the same forward pass in numpy, trained
   once on every positive (`python -m eval.sasrec --page`), and gives torch's top 10 for every checked library
   (largest score difference 6e-6) in 0.03 s.
+- **A graph neural network did not beat EASE either.** Stores describe their recommenders as graphs of who
+  played what, so I trained LightGCN (He et al., 2020) on the same likes before the cutoff
+  ([eval/lightgcn.py](eval/lightgcn.py)): game and player embeddings smoothed over three hops of the like graph,
+  trained with BPR on the GPU in about 30 minutes, a new player folded in from their games by the same rule.
+  One run with its settings fixed beforehand, scored on both sets: 0.053 on val and **0.052** on test, below EASE
+  (-0.012, -0.019 to -0.006) and level with ALS (0.054), while leaning harder on popular games than any of them
+  (mean popularity rank 138). It is a known result that a well tuned simple model often beats a newer neural one
+  on this kind of data (Dacrema et al., 2019); I tuned LightGCN far less than EASE, so read it as "not for free"
+  rather than "worse".
 - **ALS is three times better than popularity**, and it recommends 648 different games to 1000 people where
   popularity recommends the same 18 to everyone. Tuning it was cheap: of four settings (64 or 128 factors,
   alpha 1 or 4), 64 factors with alpha 4 found the most hidden games on validation.
@@ -418,6 +429,7 @@ ollama pull gemma4:12b                                              # only for t
 python -m eval.run_eval --set val --systems rerank-als20 --users 100
 python -m eval.time_split --set val                                 # the time split (frozen in eval/time_split.json)
 python -m eval.sasrec --export && pip install ".[seq]" && python -m eval.sasrec --set val   # SASRec, wants a GPU
+python -m eval.lightgcn --epochs 40 --batch 131072 --lr 0.01         # LightGCN on the same export, val and test
 python -m eval.explain_eval --set val --users 100   # how grounded the reasons are
 python -m recs.recommend --user <id from eval/split.json>   # ten picks with reasons
 ```
