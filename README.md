@@ -136,7 +136,8 @@ python -m eval.intervals eval/results/<file>.json ease als    # first system is 
 
 ## What I found
 
-The short list; each line links to its numbers in [docs/findings.md](docs/findings.md).
+The short list; each line links to its numbers in [docs/findings.md](docs/findings.md). What the page's model is
+for, how well it does and where it falls short is summed up in its [model card](docs/model_card.md).
 
 **The random split**
 
