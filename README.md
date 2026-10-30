@@ -182,6 +182,11 @@ for, how well it does and where it falls short is summed up in its [model card](
 python -m recs.profile https://steamcommunity.com/id/<name>
 ```
 
+The key, once: sign in at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (any domain
+name will do), copy `.env.example` to `.env` and put the key after `STEAM_API_KEY=`. `.env` is ignored by git.
+The profile's game details must be public (Steam: Edit Profile, Privacy Settings, Game details); without a key,
+`demo` still works.
+
 [recs/steam.py](recs/steam.py) reads one library from a profile link, only at that person's request (as the
 Steam Web API terms require), with your own key in `.env`; nothing is stored. [recs/profile.py](recs/profile.py)
 then prints, in about 3 seconds once the EASE weights are cached:
