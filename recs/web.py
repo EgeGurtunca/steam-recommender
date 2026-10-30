@@ -24,19 +24,24 @@ DEMO = steam.SteamLibrary("demo", {620: 40.0, 105600: 310.0, 413150: 120.0, 3675
                           recent={1086940: 12.0, 646570: 4.0},
                           # played lately: Baldur's Gate 3 and Slay the Spire, then Elden Ring; the rest years ago
                           last_played={1086940: 1761000000, 646570: 1760900000, 1245620: 1745000000})
+# "demo2": a second made-up library, co-op heavy, for trying "play together" with the demo
+DEMO_FRIEND = steam.SteamLibrary("demo2", {548430: 220.0, 892970: 130.0, 105600: 180.0, 413150: 90.0, 550: 60.0,
+                                           620: 25.0, 632360: 70.0, 1426210: 30.0, 322330: 110.0, 648800: 45.0},
+                                 last_played={548430: 1761000000, 892970: 1760500000})
 
 
 def card(app: int, store: dict, catalog: Catalog) -> dict:
     v = store.get(app, {})
     return {"app_id": app, "title": catalog.titles.get(app) or v.get("title", str(app)),
             "year": (v.get("released") or "")[:4], "tags": v.get("tags", [])[:4],
-            "positive": v.get("positive", 0),
+            "positive": v.get("positive", 0), "price": v.get("price"),
             "header": HEADER.format(app=app), "url": f"https://store.steampowered.com/app/{app}"}
 
 
-def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weights: dict | None = None) -> dict:
-    weights = weights or profile.idf(store)
-    played, picks = next_picks(lib, store, ranker, CANDIDATES)
+def play_next(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog,
+              only: set | None = None) -> tuple[dict, list[dict]]:
+    """The page's candidates as cards: ranked, reranked for tag variety, each with the played game behind it."""
+    played, picks = next_picks(lib, store, ranker, CANDIDATES, only=only)
     tags = {a: store.get(a, {}).get("tags") or catalog.tags.get(a, []) for a in picks}
     picks = diversify(picks, tags, DIVERSITY, len(picks))
     # "because you played X": the biggest term in EASE's sum for each pick (the page's rankers all start from EASE)
@@ -44,6 +49,14 @@ def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weig
     why = ease.because(played, picks) if hasattr(ease, "because") else {}
     because = {a: {"because": lib.titles.get(b) or catalog.titles.get(b) or store.get(b, {}).get("title", str(b))}
                for a, b in why.items()}
+    return played, [card(a, store, catalog) | because.get(a, {}) for a in picks]
+
+
+def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weights: dict | None = None) -> dict:
+    weights = weights or profile.idf(store)
+    played, next_cards = play_next(lib, store, ranker, catalog)
+    # the same from the last two weeks' games only: a change of taste shows up there first
+    recent_cards = play_next(lib, store, ranker, catalog, only=set(lib.recent))[1] if lib.recent else []
     taste = {}
     for name, library in (("all", played), ("recent", lib.recent)):
         top = profile.taste_profile(library, store, top=TASTE_TAGS, weights=weights)
@@ -55,8 +68,30 @@ def payload(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, weig
             "taste": taste, "edges": [{"a": a, "b": b, "w": w} for a, b, w in profile.tag_edges(tags, store)],
             "split": profile.social_split(played, store),
             "top_played": [{"title": lib.titles.get(a, str(a)), "hours": h} for a, h in top_played],
-            "next": [card(a, store, catalog) | because.get(a, {}) for a in picks],
+            "next": next_cards, "next_recent": recent_cards,
             "new": [card(a, store, catalog) for a in new]}
+
+
+def together(a: steam.SteamLibrary, b: steam.SteamLibrary, store: dict, ranker, catalog: Catalog,
+             k: int = 10, depth: int = 300) -> dict:
+    """Multiplayer and co-op games for two people: the ones both already own (by their hours together), and new ones
+    by least misery, the worse of the two places in their own rankings, so neither gets one they would not like. A
+    game one of them owns counts as first place for that one (the ranker never lists what a player owns)."""
+    def social(app):
+        return bool(set(store.get(app, {}).get("tags", [])) & profile.SOCIAL)
+
+    places = []
+    for lib in (a, b):
+        played = {x: h for x, h in lib.games.items() if h >= 2}
+        ranked = ranker.ranking(recency(lib, played), depth) if played else []
+        places.append({x: i for i, x in enumerate(ranked)} | {x: 0 for x in lib.games})
+    both = sorted((x for x in a.games.keys() & b.games.keys() if social(x)), key=lambda x: -(a.games[x] + b.games[x]))
+    new = [x for x in places[0].keys() & places[1].keys()
+           if not (x in a.games and x in b.games) and social(x) and profile.is_game(x, store)]
+    new.sort(key=lambda x: max(places[0][x], places[1][x]))
+    return {"both_own": [card(x, store, catalog) for x in both[:k]],
+            "new": [card(x, store, catalog) | {"owned_by": "you" if x in a.games else "friend" if x in b.games else None}
+                    for x in new[:k]]}
 
 
 def recency(lib: steam.SteamLibrary, played: dict, now: float | None = None) -> dict[int, float]:
@@ -68,8 +103,9 @@ def recency(lib: steam.SteamLibrary, played: dict, now: float | None = None) -> 
     return {a: w.get(a, oldest) for a in played}
 
 
-def next_picks(lib: steam.SteamLibrary, store: dict, ranker, k: int = 10, now: float | None = None) -> tuple[dict, list[int]]:
-    played = {a: h for a, h in lib.games.items() if h >= 2}
+def next_picks(lib: steam.SteamLibrary, store: dict, ranker, k: int = 10, now: float | None = None,
+               only: set | None = None) -> tuple[dict, list[int]]:
+    played = {a: h for a, h in lib.games.items() if h >= 2 and (only is None or a in only)}
     picks = ranker.ranking(recency(lib, played, now), k + 50)
     return played, [a for a in picks if a not in lib.games and profile.is_game(a, store)][:k]
 
@@ -95,7 +131,7 @@ def reasons(lib: steam.SteamLibrary, store: dict, ranker, catalog: Catalog, gene
 
 
 def library(link: str) -> steam.SteamLibrary:
-    return DEMO if link.strip() == "demo" else steam.load_library(link)
+    return {"demo": DEMO, "demo2": DEMO_FRIEND}.get(link.strip()) or steam.load_library(link)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -112,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         if url.path == "/":
             return self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-        if url.path not in ("/api/profile", "/api/reasons"):
+        if url.path not in ("/api/profile", "/api/reasons", "/api/together"):
             return self.send(404, b"not found", "text/plain")
         query = urllib.parse.parse_qs(url.query)
         link = query.get("link", [""])[0]
@@ -120,7 +156,9 @@ class Handler(BaseHTTPRequestHandler):
             apps = [int(a) for a in query.get("apps", [""])[0].split(",") if a]
             lib = library(link)
             st = self.state
-            if url.path == "/api/reasons":
+            if url.path == "/api/together":  # the friend's own link, given with their OK
+                body = together(lib, library(query.get("friend", [""])[0]), st["store"], st["ranker"], st["catalog"])
+            elif url.path == "/api/reasons":
                 from recs import llm
                 with llm.ollama():  # started for this request and stopped (with its children) right after
                     body = reasons(lib, st["store"], st["ranker"], st["catalog"], apps=apps)

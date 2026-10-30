@@ -197,7 +197,9 @@ python -m recs.web      # http://127.0.0.1:8000
 Paste a profile link and it draws the taste as a bubble graph (D3): one bubble per tag, sized by its share,
 linked to the tags that describe the same games across the store (Jaccard over well-reviewed games), so related
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
-shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages. Two sliders, popular to niche and
+shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages and the price from the
+October 2026 catalogue. "Play next" can rank from all your games or only the last two weeks' (a change of taste shows
+there first), and can be limited to free games or a price. Two sliders, popular to niche and
 older to newer, borrowed from Steam's own interactive recommender, re-sort the ranker's top 60 in the page: each
 adds the game's percentile among those 60 (review count, release year) to the ranker's order, so at the middle
 the order is untouched. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,
@@ -212,6 +214,15 @@ reranked for tag variety ([how much it costs](docs/findings.md#variety-cost-noth
 asks gemma4 for one line per "play next" card, from the games you played (schema-limited to those ten, in
 the page's order); the 2023 to 2026 games it names come from the store catalogue, so a library full of recent games
 still reads correctly. Ollama is started for that request and stopped right after.
+
+**Play together**: a friend's profile link (theirs to give; `demo2` is a made-up one) gives the multiplayer and
+co-op games you both own, by your hours together, and new ones by least misery, the usual baseline for a group:
+each game ranks by the worse of its two places in your own rankings, so neither of you gets one you would not
+like. A game one of you owns counts as top for that one, and its card says who owns it.
+
+On a laptop the page starts in about 1.2 s (EASE trains itself in about 20 s the first time), draws a library in
+about 0.3 s and holds about 770 MB, most of it EASE's 10,816 x 10,816 matrix (`python -m eval.bench_page`). A
+test fails if one page takes over a second on a store of real size.
 
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
 and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
@@ -243,10 +254,10 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-84 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+87 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
 frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
-duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
+duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key, one page in under a second, the last two weeks' own picks, play together by least misery), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
 ## What's next
 
