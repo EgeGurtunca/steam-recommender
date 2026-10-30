@@ -8,7 +8,7 @@ license = "MIT"
 dependencies = ["duckdb>=2.0,<3", "numpy>=2.5,<3", "scipy>=1.18,<2", "scikit-learn>=1.9,<2", "implicit>=0.7.3,<0.8"]
 
 [project.optional-dependencies]
-dev = ["pytest>=9"]
+dev = ["pytest>=9", "ruff>=0.17"]
 seq = ["torch>=2.6"]  # only eval/sasrec.py, and only its training step
 
 [tool.setuptools]
@@ -17,3 +17,13 @@ packages = ["recs"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]  # pycodestyle, pyflakes, import order, bugbear
+ignore = ["B905"]  # zip(strict=): every zip here pairs columns of one table
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E731", "E501"]  # one-line fakes for monkeypatch; one made-up game per line

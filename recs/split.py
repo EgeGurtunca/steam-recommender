@@ -46,5 +46,5 @@ if __name__ == "__main__":
     try:
         save_split(make_split(*load_positives()), force="--force" in sys.argv)
     except FileExistsError as e:
-        raise SystemExit(str(e))
+        raise SystemExit(str(e)) from None
     print(f"wrote {SPLIT_PATH}")

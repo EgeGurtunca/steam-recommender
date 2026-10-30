@@ -9,4 +9,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ".[dev]"
+      - run: ruff check .
       - run: pytest -q

@@ -91,6 +91,7 @@ def sample_new(store: dict, since: str, n: int, min_reviews: int = 20, seed: int
     """A random sample of games released from `since` with at least `min_reviews` reviews: new releases as they
     come, mostly not hits, which the top lists above never reach."""
     import random
+
     from recs.profile import is_game
     pool = sorted(a for a, v in store.items() if (v.get("released") or "") >= since and is_game(a, store)
                   and v.get("positive", 0) + v.get("negative", 0) >= min_reviews)

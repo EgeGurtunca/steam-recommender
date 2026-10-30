@@ -89,6 +89,7 @@ def test_transitions_count_what_each_user_liked_next():
 
 def test_a_stale_transition_cache_is_counted_again(tmp_path, monkeypatch):
     from scipy.sparse import csr_matrix, save_npz
+
     from recs import data, sequence
     save_npz(tmp_path / "t.npz", csr_matrix((2, 2), dtype=np.float32))  # built for two games
     dates = np.array(["2020-01-01", "2020-02-01"], dtype="datetime64[D]")

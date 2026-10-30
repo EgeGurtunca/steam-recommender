@@ -283,6 +283,7 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 
 ```bash
 pytest
+ruff check .   # lint, as in CI: pyflakes, pycodestyle, import order, bugbear
 ```
 
 91 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the

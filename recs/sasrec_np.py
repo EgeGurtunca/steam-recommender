@@ -58,7 +58,8 @@ class SASRec:
             return []
         s = self.scores_for(np.array([idx + [0] * (MAX_LEN - len(idx))]))[0]
         owned = set(ordered)
-        return [int(self.item_ids[j]) for j in np.argsort(-s)[: n + len(owned)] if int(self.item_ids[j]) not in owned][:n]
+        top = (int(self.item_ids[j]) for j in np.argsort(-s)[: n + len(owned)])
+        return [a for a in top if a not in owned][:n]
 
 
 class SasrecNudge:

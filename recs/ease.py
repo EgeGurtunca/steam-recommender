@@ -53,6 +53,7 @@ class EASE:
         """The page's weights: the full matrix if built, else the small copy (recs/bundle.py), else trained on every
         positive (about 20 s) and saved."""
         from pathlib import Path
+
         from recs import data
         from recs.popularity import Popularity
         if (Path(folder) / "b.npy").exists():

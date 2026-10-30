@@ -20,7 +20,8 @@ import numpy as np
 from eval.metrics import diversify, recall_at_k, tag_diversity
 from eval.run_eval import RESULTS, Systems, evaluate, table
 from recs.core import top_up
-from recs.data import ROOT, build_interactions, load_catalog, load_positive_dates as positive_dates
+from recs.data import ROOT, build_interactions, load_catalog
+from recs.data import load_positive_dates as positive_dates
 from recs.ease import EASE
 from recs.popularity import Popularity
 from recs.sasrec_np import SasrecNudge
@@ -77,8 +78,8 @@ def by_recency(entries: list[dict], liked_on: dict, half_life: float, cutoff: st
     """The same users with each visible game weighted by how long before the cutoff they liked it, half the weight
     per half-life: what a user liked lately says more about what they like next."""
     end = np.datetime64(cutoff or CUTOFF)
-    return [{**e, "visible": {a: 0.5 ** ((end - liked_on[(e["user"], a)]).astype(int) / half_life) for a in e["visible"]}}
-            for e in entries]
+    return [{**e, "visible": {a: 0.5 ** ((end - liked_on[(e["user"], a)]).astype(int) / half_life)
+                              for a in e["visible"]}} for e in entries]
 
 
 class SasrecAlone:
@@ -159,7 +160,8 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
         tag = "" if CUTOFF == "2022-01-01" else CUTOFF[:4] + "-"
         path = sorted(RESULTS.glob(f"*-sasrec-{tag}{part}.json"))[-1]
         shown = {e["user"]: frozenset(e["visible"]) for e in systems.cache["entries"]}
-        top = {shown[u["user"]]: u["top100"] for u in json.loads(path.read_text(encoding="utf-8"))["rows"][0]["per_user"]}
+        run = json.loads(path.read_text(encoding="utf-8"))["rows"][0]["per_user"]
+        top = {shown[u["user"]]: u["top100"] for u in run}
         print(f"  SASRec candidates from {path.name}", flush=True)
         nudge = SasrecNudge(systems.get("ease"), SavedSasrec(top), float(name.split(":")[1]),
                             fallback=systems.popularity.ranking)
@@ -211,8 +213,8 @@ def main() -> None:
     ap.add_argument("--diversify", type=float, help="pick each system's top 60 again for tag variety (lambda)")
     ap.add_argument("--systems", default="popularity,content,als,ease",
                     help="also pop-recent:<days>, ease-decay:<half-life days>, ease+recent:<beta>, "
-                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, ease+sasrec-np:<gamma>, "
-                         "ease-top:<k>")
+                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, "
+                         "ease+sasrec-np:<gamma>, ease-top:<k>")
     ap.add_argument("--cutoff", help="another deployment date (e.g. 2021-01-01): its own frozen split, the year "
                                      "after it hidden, everything later dropped")
     args = ap.parse_args()
@@ -226,7 +228,7 @@ def main() -> None:
         try:
             save_split(make_time_split(users, apps, hours, dates, cutoff=CUTOFF), TIME_SPLIT_PATH)
         except FileExistsError as e:
-            raise SystemExit(str(e))
+            raise SystemExit(str(e)) from None
         print(f"wrote {TIME_SPLIT_PATH}")
         return
     if args.make_holdout:
@@ -236,7 +238,7 @@ def main() -> None:
         try:
             save_split({"holdout": group}, HOLDOUT_PATH)
         except FileExistsError as e:
-            raise SystemExit(str(e))
+            raise SystemExit(str(e)) from None
         print(f"wrote {HOLDOUT_PATH}")
         return
 
@@ -267,13 +269,15 @@ def main() -> None:
     print(f"time split, {args.set}, {len(entries)} users")
     print(table(rows))
     for r in rows:
-        print(f"{r['system']}: tag diversity {tag_diversity([u['recs'] for u in r['per_user']], systems.catalog.tags):.3f}")
+        variety = tag_diversity([u["recs"] for u in r["per_user"]], systems.catalog.tags)
+        print(f"{r['system']}: tag diversity {variety:.3f}")
     for r in rows:  # the same, counting only hidden games training has seen: what no model could find is left out
         known = [recall_at_k(u["recs"], [a for a in u["hidden"] if a in train.item_index]) for u in r["per_user"]
                  if any(a in train.item_index for a in u["hidden"])]
         print(f"{r['system']}: recall@10 {sum(known) / len(known):.3f} on games training knows ({len(known)} users)")
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time{'-' + CUTOFF[:4] if args.cutoff else ''}-{args.set}{f'-last{args.last}' if args.last else ''}.json"
+    year, last = f"-{CUTOFF[:4]}" if args.cutoff else "", f"-last{args.last}" if args.last else ""
+    out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-time{year}-{args.set}{last}.json"
     out.write_text(json.dumps({"args": vars(args), "rows": rows}), encoding="utf-8")
     print(f"per-user results: {out}")
 

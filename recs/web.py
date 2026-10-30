@@ -17,7 +17,8 @@ HEADER = "https://cdn.cloudflare.steamstatic.com/steam/apps/{app}/header.jpg"
 TASTE_TAGS = 16
 CANDIDATES = 60  # EASE's top 60 go to the page, which re-sorts them with the popular/niche and older/newer sliders
 DIVERSITY = 0.8  # tag variety in that order (recs.core.diversify): no recall lost on the time split, val or test
-# "demo" in the link box: a made-up library, so the page can be tried (and shown) without a Steam key or anyone's profile
+# "demo" in the link box: a made-up library, so the page can be tried (and shown) without a Steam key or anyone's
+# profile
 DEMO = steam.SteamLibrary("demo", {620: 40.0, 105600: 310.0, 413150: 120.0, 367520: 65.0, 292030: 140.0, 489830: 90.0,
                                    1145360: 55.0, 504230: 25.0, 646570: 180.0, 588650: 45.0, 427520: 260.0,
                                    294100: 200.0, 264710: 50.0, 374320: 70.0, 1245620: 110.0, 1086940: 150.0},
@@ -90,8 +91,8 @@ def together(a: steam.SteamLibrary, b: steam.SteamLibrary, store: dict, ranker, 
            if not (x in a.games and x in b.games) and social(x) and profile.is_game(x, store)]
     new.sort(key=lambda x: max(places[0][x], places[1][x]))
     return {"both_own": [card(x, store, catalog) for x in both[:k]],
-            "new": [card(x, store, catalog) | {"owned_by": "you" if x in a.games else "friend" if x in b.games else None}
-                    for x in new[:k]]}
+            "new": [card(x, store, catalog)
+                    | {"owned_by": "you" if x in a.games else "friend" if x in b.games else None} for x in new[:k]]}
 
 
 def recency(lib: steam.SteamLibrary, played: dict, now: float | None = None) -> dict[int, float]:
@@ -192,8 +193,8 @@ def main(port: int = 8000) -> None:
     from recs.ease import EASE
     print("loading the store catalogue and the EASE weights (trained the first time, about 20 s)...")
     store = load_store()
-    Handler.state = {"store": store, "catalog": load_catalog(), "ranker": page_ranker(EASE.load_or_build(BUILD_DIR / "ease")),
-                     "weights": profile.idf(store)}
+    Handler.state = {"store": store, "catalog": load_catalog(),
+                     "ranker": page_ranker(EASE.load_or_build(BUILD_DIR / "ease")), "weights": profile.idf(store)}
     print(f"open http://127.0.0.1:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
 

@@ -39,7 +39,8 @@ def cold_start_entries(entries: list[dict], new_apps: set[int]) -> list[dict]:
     return out
 
 
-def paired_bootstrap(base: list[float], other: list[float], n: int = 10000, seed: int = 0) -> tuple[float, float, float]:
+def paired_bootstrap(base: list[float], other: list[float], n: int = 10000,
+                     seed: int = 0) -> tuple[float, float, float]:
     """Mean of other - base over the same users, with a 95% interval from resampling users. If the interval
     holds 0, the eval cannot tell the two systems apart."""
     d = np.asarray(other, dtype=float) - np.asarray(base, dtype=float)

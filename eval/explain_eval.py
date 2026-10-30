@@ -26,12 +26,11 @@ def main() -> None:
     args = ap.parse_args()
     split, catalog = load_split(), load_catalog()
     if args.ranker == "page":  # its model has seen every user: this measures the reasons, not the picks
-        from recs.data import BUILD_DIR
+        from recs.data import BUILD_DIR, load_store
         from recs.ease import EASE
+        from recs.profile import is_game
         from recs.recommend import InOrder
         from recs.web import page_ranker
-        from recs.data import load_store
-        from recs.profile import is_game
         page, store = page_ranker(EASE.load_or_build(BUILD_DIR / "ease")), load_store()
         ordered = InOrder(page)
 
@@ -61,7 +60,8 @@ def main() -> None:
                 print(f"PROGRESS {n}/{args.users} grounded so far {sum(p['grounded'] for p in done) / len(done):.2f}",
                       flush=True)
     picks = [p for r in rows for p in r["picks"]]
-    print(f"{args.set}, {len(rows)} users, {len(picks)} reasons: grounded {sum(p['grounded'] for p in picks) / len(picks):.2f}, "
+    grounded = sum(p["grounded"] for p in picks) / len(picks)
+    print(f"{args.set}, {len(rows)} users, {len(picks)} reasons: grounded {grounded:.2f}, "
           f"empty {sum(not p['reason'] for p in picks) / len(picks):.2f}, failed calls {explainer.failures}, "
           f"{(time.perf_counter() - start) / len(rows):.1f} s/user")
     if because:

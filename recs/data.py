@@ -44,7 +44,8 @@ def connect(raw_dir: Path = RAW_DIR) -> duckdb.DuckDBPyConnection:
             columns = {{'app_id': 'BIGINT', 'helpful': 'BIGINT', 'funny': 'BIGINT', 'date': 'DATE',
                         'is_recommended': 'BOOLEAN', 'hours': 'DOUBLE', 'user_id': 'BIGINT', 'review_id': 'BIGINT'}});
         create view games as select app_id, title, date_release
-            from read_csv('{raw_dir.as_posix()}/games.csv', header = true, types = {{'app_id': 'BIGINT', 'date_release': 'DATE'}});
+            from read_csv('{raw_dir.as_posix()}/games.csv', header = true,
+                          types = {{'app_id': 'BIGINT', 'date_release': 'DATE'}});
         create view metadata as select app_id, tags
             from read_json('{raw_dir.as_posix()}/games_metadata.json', format = 'newline_delimited',
                            columns = {{'app_id': 'BIGINT', 'description': 'VARCHAR', 'tags': 'VARCHAR[]'}});
@@ -60,7 +61,8 @@ def check_quality(con: duckdb.DuckDBPyConnection) -> list[str]:
     lo, hi = con.execute("select min(date), max(date) from recommendations").fetchone()
     if str(lo) < "2010-01-01" or str(hi) > "2023-12-31":
         raise DataQualityError(f"review dates {lo}..{hi} outside 2010-01-01..2023-12-31")
-    missing = con.execute("select count(distinct app_id) from recommendations anti join games using (app_id)").fetchone()[0]
+    missing = con.execute(
+        "select count(distinct app_id) from recommendations anti join games using (app_id)").fetchone()[0]
     if missing:
         raise DataQualityError(f"{missing} reviewed app ids missing from games.csv")
     untagged = con.execute("select avg(case when len(coalesce(tags, [])) = 0 then 1 else 0 end) from games "
@@ -79,12 +81,14 @@ def build(raw_dir: Path = RAW_DIR, build_dir: Path = BUILD_DIR, min_user: int = 
         con.execute("delete from pos where app_id in (select app_id from pos group by app_id having count(*) < ?)",
                     [min_app])
     build_dir.mkdir(parents=True, exist_ok=True)
-    con.execute(f"copy (select * from pos order by user_id, app_id) to '{build_dir.as_posix()}/positives.parquet' (format parquet)")
+    con.execute(f"copy (select * from pos order by user_id, app_id) "
+                f"to '{build_dir.as_posix()}/positives.parquet' (format parquet)")
     con.execute(f"""copy (select app_id, title, date_release, coalesce(tags, []) as tags
                           from games left join metadata using (app_id)
                           where app_id in (select app_id from pos) order by app_id)
                     to '{build_dir.as_posix()}/games.parquet' (format parquet)""")
-    users, apps, rows = con.execute("select count(distinct user_id), count(distinct app_id), count(*) from pos").fetchone()
+    users, apps, rows = con.execute(
+        "select count(distinct user_id), count(distinct app_id), count(*) from pos").fetchone()
     return {"users": users, "apps": apps, "positives": rows}
 
 
@@ -96,13 +100,16 @@ class Catalog:
 
 
 def load_catalog(build_dir: Path = BUILD_DIR) -> Catalog:
-    rows = duckdb.execute(f"select app_id, title, date_release, tags from '{build_dir.as_posix()}/games.parquet'").fetchall()
-    return Catalog({a: t for a, t, _, _ in rows}, {a: list(g) for a, _, _, g in rows}, {a: str(d) for a, _, d, _ in rows})
+    rows = duckdb.execute(
+        f"select app_id, title, date_release, tags from '{build_dir.as_posix()}/games.parquet'").fetchall()
+    return Catalog({a: t for a, t, _, _ in rows}, {a: list(g) for a, _, _, g in rows},
+                   {a: str(d) for a, _, d, _ in rows})
 
 
 def load_all_titles(raw_dir: Path = RAW_DIR) -> dict[int, str]:
     """Every app in games.csv, filtered out or not (the free-form experiment checks LLM titles against it)."""
-    return dict(duckdb.execute(f"select app_id, title from read_csv('{raw_dir.as_posix()}/games.csv', header = true)").fetchall())
+    return dict(duckdb.execute(
+        f"select app_id, title from read_csv('{raw_dir.as_posix()}/games.csv', header = true)").fetchall())
 
 
 def load_positives(build_dir: Path = BUILD_DIR) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

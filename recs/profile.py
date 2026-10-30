@@ -12,11 +12,11 @@ from recs.core import Library
 # Steam genres that mean a program, not a game (Wallpaper Engine, editors, courses)
 NON_GAME = {"Utilities", "Design & Illustration", "Video Production", "Animation & Modeling", "Audio Production",
             "Web Publishing", "Photo Editing", "Software Training", "Accounting", "Education", "Game Development"}
-TAGS_USED = 10
+TAGS_USED = 10  # Steam lists a game's tags by votes; the first ones describe it best
 # how a game is played, not what kind of game it is: left out of the taste, reported by social_split instead
-FORMAT = {"Multiplayer", "Singleplayer", "Free to Play", "Co-op", "Online Co-Op", "Local Co-Op", "Massively Multiplayer",
-          "PvP", "Online PvP", "PvE", "Early Access", "Indie", "Casual"}
-SOCIAL = {"Multiplayer", "Co-op", "Online Co-Op", "Local Co-Op", "Massively Multiplayer", "PvP", "Online PvP"}  # Steam lists a game's tags by votes; the first ones describe it best
+FORMAT = {"Multiplayer", "Singleplayer", "Free to Play", "Co-op", "Online Co-Op", "Local Co-Op",
+          "Massively Multiplayer", "PvP", "Online PvP", "PvE", "Early Access", "Indie", "Casual"}
+SOCIAL = {"Multiplayer", "Co-op", "Online Co-Op", "Local Co-Op", "Massively Multiplayer", "PvP", "Online PvP"}
 
 
 def is_game(app: int, store: dict) -> bool:
@@ -59,7 +59,8 @@ def taste_profile(library: Library, store: dict, top: int = 12, weights: dict | 
     return [(t, v / total) for t, v in vec.most_common(top)]
 
 
-def tag_edges(tags: list[str], store: dict, min_positive: int = 500, min_jaccard: float = 0.08) -> list[tuple[str, str, float]]:
+def tag_edges(tags: list[str], store: dict, min_positive: int = 500,
+              min_jaccard: float = 0.08) -> list[tuple[str, str, float]]:
     """Which of these tags tend to describe the same games (Jaccard over reviewed games), for the bubble graph."""
     games = {t: set() for t in tags}
     for app, v in store.items():
@@ -93,7 +94,8 @@ def new_releases(library: Library, store: dict, since: str = "2024-01-01", k: in
     norm_u = math.sqrt(sum(v * v for v in user.values())) or 1.0
     scored = []
     for app, v in store.items():
-        if app in library or not v["released"] or v["released"] < since or v["positive"] < min_positive or not is_game(app, store):
+        if (app in library or not v["released"] or v["released"] < since or v["positive"] < min_positive
+                or not is_game(app, store)):
             continue
         tags = v["tags"][:TAGS_USED]
         norm_c = math.sqrt(sum(weights.get(t, 0) ** 2 for t in tags)) or 1.0

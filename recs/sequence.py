@@ -16,7 +16,8 @@ GAMMA = 3.0  # best of 0.3 to 30 on the time split's val users
 HALF_LIFE = 180.0  # days: how fast an older game's say fades
 
 
-def transitions(users: np.ndarray, apps: np.ndarray, dates: np.ndarray, index: dict[int, int], window: int = 3) -> csr_matrix:
+def transitions(users: np.ndarray, apps: np.ndarray, dates: np.ndarray, index: dict[int, int],
+                window: int = 3) -> csr_matrix:
     """How often each game was followed, among a user's likes in date order, by each of the next `window` likes.
     Rows sum to 1: P(liked soon after | this game). Games outside index are skipped."""
     order = np.lexsort((dates, users))

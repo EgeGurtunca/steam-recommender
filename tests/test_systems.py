@@ -145,6 +145,7 @@ def test_ranker_reorders_ease_candidates_by_what_it_learned():
 
 def test_ease_can_weigh_likes_by_the_matrix_values():
     from scipy.sparse import csr_matrix
+
     from recs.data import Interactions
     from recs.ease import EASE
     # users 0-1 liked games 1 and 2 long ago (weight 0.1), users 2-3 liked games 1 and 3 recently (weight 1)

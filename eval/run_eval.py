@@ -11,15 +11,24 @@ from contextlib import nullcontext
 from datetime import datetime
 
 from eval import metrics
+from recs import llm
 from recs.als import ALS
 from recs.content import Content
+from recs.data import (
+    ROOT,
+    Catalog,
+    Interactions,
+    build_interactions,
+    load_all_titles,
+    load_catalog,
+    load_positives,
+    load_store,
+)
 from recs.ease import EASE
-from recs.hybrid import Hybrid
-from recs import llm
-from recs.rerank import LLMRerank
 from recs.freeform import FreeFormLLM
-from recs.data import ROOT, Catalog, Interactions, build_interactions, load_all_titles, load_catalog, load_positives, load_store
+from recs.hybrid import Hybrid
 from recs.popularity import Popularity
+from recs.rerank import LLMRerank
 from recs.split import load_split
 
 RESULTS = ROOT / "eval" / "results"
@@ -47,7 +56,8 @@ class Systems:
             store = load_store()
             tags = {a: (store[a]["tags"] or t) if a in store else t for a, t in self.catalog.tags.items()}
             cat = Catalog(self.catalog.titles, tags, self.catalog.released)
-            c = Content(cat, fallback=self.popularity.ranking, prior={a: v["positive"] for a, v in store.items()}, beta=beta)
+            c = Content(cat, fallback=self.popularity.ranking, prior={a: v["positive"] for a, v in store.items()},
+                        beta=beta)
             c.name = name
             return c
         if name.startswith("bridge"):  # "bridge:<alpha>": ALS plus description-predicted factors for unseen games
@@ -122,7 +132,8 @@ def evaluate(system, entries: list[dict], pop_rank: dict[int, int]) -> dict:
 
 def table(rows: list[dict]) -> str:
     cols = ["system", "recall@10", "ndcg@10", "hit@10", "coverage", "mean pop rank", "s/user"]
-    fmt = {"recall@10": "{:.3f}", "ndcg@10": "{:.3f}", "hit@10": "{:.3f}", "coverage": "{}", "mean pop rank": "{:.0f}", "s/user": "{:.3f}"}
+    fmt = {"recall@10": "{:.3f}", "ndcg@10": "{:.3f}", "hit@10": "{:.3f}", "coverage": "{}", "mean pop rank": "{:.0f}",
+           "s/user": "{:.3f}"}
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
         lines.append("| " + " | ".join(fmt.get(c, "{}").format(r[c]) for c in cols) + " |")
@@ -136,7 +147,8 @@ def main() -> None:
     ap.add_argument("--users", type=int, default=1000)
     ap.add_argument("--cold-start", action="store_true",
                     help=f"treat games released from {NEW_FROM} as new: out of training, scored alone")
-    ap.add_argument("--new-only", action="store_true", help="with --cold-start: every system picks among new games only")
+    ap.add_argument("--new-only", action="store_true",
+                    help="with --cold-start: every system picks among new games only")
     args = ap.parse_args()
 
     split = load_split()
@@ -163,7 +175,8 @@ def main() -> None:
             t = systems.get(name).totals
             print(f"{name}: {t['titles']} titles named, {t['on_steam']} exist in the Steam list, "
                   f"{t['matched']} in our catalog, {t['owned']} already owned")
-    print(f"{args.set}, {len(entries)} users, k={K}, train: {train.matrix.shape[0]} users x {train.matrix.shape[1]} games")
+    print(f"{args.set}, {len(entries)} users, k={K}, "
+          f"train: {train.matrix.shape[0]} users x {train.matrix.shape[1]} games")
     print(table(rows))
     RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"{datetime.now():%Y-%m-%d-%H%M}-{args.set}.json"

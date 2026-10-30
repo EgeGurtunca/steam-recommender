@@ -43,7 +43,8 @@ def early_reviews(new_apps: set[int], users: np.ndarray, by: str = "count") -> t
 
 def with_first(k: int, base: tuple, early: tuple, eval_users: set[int]):
     keep = early[3] <= k
-    return build_interactions(*(np.concatenate([b, e[keep]]) for b, e in zip(base, early[:3])), exclude_users=eval_users)
+    return build_interactions(*(np.concatenate([b, e[keep]]) for b, e in zip(base, early[:3])),
+                              exclude_users=eval_users)
 
 
 def main() -> None:
@@ -70,7 +71,8 @@ def main() -> None:
         pop_rank = {app: i + 1 for i, app in enumerate(pop.ranking)}
         for part in rows:
             rows[part].append(evaluate(system, metrics.cold_start_entries(split[part], new_apps), pop_rank))
-        print(f"[{i}/{len(ks)}] k={k}: val {rows['val'][-1]['recall@10']:.3f}, test {rows['test'][-1]['recall@10']:.3f}", flush=True)
+        print(f"[{i}/{len(ks)}] k={k}: val {rows['val'][-1]['recall@10']:.3f}, "
+              f"test {rows['test'][-1]['recall@10']:.3f}", flush=True)
     for part, r in rows.items():
         print(f"\n{part}, {len(r[0]['per_user'])} users with a hidden new game")
         print(table(r))

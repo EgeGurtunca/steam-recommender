@@ -40,7 +40,8 @@ class Features:
             year = (v.get("released") or self.released.get(app) or "")[:4]
             t = self.content.index.get(app) if self.content else None
             rows.append([scores[i], scores[i] / best, rank, math.log1p(self.popularity.get(app, 0)),
-                         float(year) if year else np.nan, pos / (pos + neg) if pos + neg else np.nan, math.log1p(pos + neg),
+                         float(year) if year else np.nan, pos / (pos + neg) if pos + neg else np.nan,
+                         math.log1p(pos + neg),
                          tags[t] if tags is not None and t is not None else np.nan, math.log1p(len(library))])
         return apps, np.asarray(rows, dtype=np.float64)
 

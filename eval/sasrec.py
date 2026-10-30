@@ -41,7 +41,8 @@ def export(everything: bool = False, cutoff: str | None = None) -> None:
     users, apps, hours, dates = load_positive_dates()
     split = {} if everything else load_groups()  # val, test and the holdout group all stay out of training
     eval_users = {e["user"] for part in split.values() for e in part}
-    keep = np.ones(len(users), bool) if everything else (dates < np.datetime64(CUTOFF)) & ~np.isin(users, list(eval_users))
+    keep = (np.ones(len(users), bool) if everything
+            else (dates < np.datetime64(CUTOFF)) & ~np.isin(users, list(eval_users)))
     item_ids = np.unique(apps[keep])
     index = {int(a): i + 1 for i, a in enumerate(item_ids)}  # 0 is padding
     order = np.lexsort((dates[keep], users[keep]))
@@ -136,8 +137,8 @@ def train_and_score(part: str | None, epochs: int, dim: int, seed: int, save=Non
             opt.step()
             total += loss.item()
             if b % 100 == 0:  # one overall count, which the progress pane reads for the time left
-                print(f"PROGRESS {(epoch - 1) * steps + b}/{epochs * steps} (epoch {epoch}, loss {total / (b + 1):.3f})",
-                      flush=True)
+                print(f"PROGRESS {(epoch - 1) * steps + b}/{epochs * steps} "
+                      f"(epoch {epoch}, loss {total / (b + 1):.3f})", flush=True)
 
     model.eval()
     item_ids = d["item_ids"]
