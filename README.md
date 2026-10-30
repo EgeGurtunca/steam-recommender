@@ -36,16 +36,16 @@ python -c "import zipfile; zipfile.ZipFile('demo-data.zip').extractall('.')"
 ```
 
 **Stack:** Python 3.12 · DuckDB (SQL over a 2 GB CSV) · numpy / scipy · implicit (ALS) · scikit-learn (TF-IDF) ·
-Ollama (`gemma4:12b`) · PyTorch (SASRec) · pytest
+Ollama (`gemma4:12b`, `bge-m3`) · PyTorch (SASRec) · pytest · ruff
 
 ## Data
 
 The Kaggle dataset [Game Recommendations on Steam](https://www.kaggle.com/datasets/antonkozyriev/game-recommendations-on-steam)
 (snapshot of August 2024): 41.2M reviews from 14.3M anonymised users on 50.9K apps, each with the date, whether
 the user recommends the game, and the hours they had played by then. Reviews run from 2010 to the end of 2022.
-The raw files are not in this repo. The frozen evaluation groups in `eval/*.json` are: each holds a few
-thousand of the dataset's anonymised user numbers with their games, so that every result here can be
-scored again on the same users.
+The raw files are not in this repo. The frozen evaluation groups are (`eval/*.json`): each holds one or two
+thousand of the dataset's anonymised user numbers with their games, so that every result here can be scored
+again on the same users.
 
 [recs/data.py](recs/data.py) turns it into training data in SQL, with checks that stop the build on bad data
 (negative hours, dates outside the expected range, reviewed apps missing from the game list):
@@ -222,12 +222,12 @@ linked to the tags that describe the same games across the store (Jaccard over w
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
 shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages and the price from the
 October 2026 catalogue. "Play next" can rank from all your games or only the last two weeks' (a change of taste shows
-there first), and can be limited to free games or a price. "Not for me" on a card hides that game from both lists, kept in your browser only;
-one button brings them all back. Two sliders, popular to niche and
-older to newer, borrowed from Steam's own interactive recommender, re-sort the ranker's top 60 in the page: each
-adds the game's percentile among those 60 (review count, release year) to the ranker's order, so at the middle
-the order is untouched. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,
-not obscure. The candidates are EASE nudged by SASRec, the pair that did best on the time split's test, reading the
+there first), and can be limited to free games or a price. "Not for me" on a card hides that game from both
+lists, kept in your browser only; one button brings them all back. Two sliders, popular to niche and older to
+newer, borrowed from Steam's own interactive recommender, re-sort the ranker's top 60 in the page: each adds the
+game's percentile among those 60 (review count, release year) to the ranker's order, so at the middle the order
+is untouched. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less
+known, not obscure. The candidates are EASE nudged by SASRec, the pair that did best on the time split's test, reading the
 library in the order Steam's API gives as each game's last-played time (EASE + transitions if the SASRec weights
 are not there). On the demo library a recent run of Slay the Spire brings Inscryption, Vampire Survivors and
 ULTRAKILL into the top ten; with transitions alone the nudge also lifted the games that were rising in 2021 and
@@ -313,7 +313,8 @@ duplicates, the store catalogue's broken header, the collector (paging, hashing,
 - For new releases, reviewers with more of their library: per-game review sampling gives each reviewer a
   handful of links, which the fresh eval shows is not enough to beat tags
 
-Not affiliated with Valve. No user data is stored; the dataset's user ids are anonymised.
+Not affiliated with Valve. The page keeps nothing about the people who use it (the "Not for me" list stays in
+their browser), and the dataset's user ids were anonymised by its authors.
 
 The code is under the [MIT license](LICENSE). The datasets, Steam's reviews and the game images are not part of
 this repository and keep their own terms. If you hold rights to any of the data here or in the demo bundle and want it
