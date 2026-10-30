@@ -264,6 +264,21 @@ python -m recs.recommend --library lib.json   # the page's picks with gemma4's r
 On Windows with more than 24 logical cores, OpenBLAS (as shipped with numpy) crashes inside implicit; the
 package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 
+## Layout
+
+- **The page and its models** (`recs/`): [web.py](recs/web.py) and [static/index.html](static/index.html), the
+  ranker [ease.py](recs/ease.py) + [sasrec_np.py](recs/sasrec_np.py) (or [sequence.py](recs/sequence.py)), with
+  [popularity.py](recs/popularity.py) for an empty library, the
+  library and taste ([steam.py](recs/steam.py), [profile.py](recs/profile.py)), the optional reasons
+  ([explain.py](recs/explain.py) with [llm.py](recs/llm.py)), and [data.py](recs/data.py) and
+  [bundle.py](recs/bundle.py) for the files it reads.
+- **Systems kept for the comparison** (`recs/`, used by the eval only):
+  [content.py](recs/content.py), [als.py](recs/als.py), [hybrid.py](recs/hybrid.py), [rerank.py](recs/rerank.py),
+  [freeform.py](recs/freeform.py), [ranker.py](recs/ranker.py), [describe.py](recs/describe.py); the page borrows
+  title matching from freeform.py and the candidate format from rerank.py for its reasons.
+- **Measuring** (`eval/`): the splits and metrics, one script per experiment, frozen user groups in `eval/*.json`.
+- **Tests** (`tests/`): one file per module, on tiny made-up data.
+
 ## Tests
 
 ```bash
