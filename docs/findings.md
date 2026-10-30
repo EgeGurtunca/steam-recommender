@@ -288,6 +288,24 @@ One run with its settings fixed beforehand, scored on both sets: 0.053 on val an
 on this kind of data (Dacrema et al., 2019); I tuned LightGCN far less than EASE, so read it as "not for free"
 rather than "worse".
 
+### An 8 MB EASE finds the same as the 447 MB one
+
+EASE's weights are a dense 10,816 x 10,816 matrix, too big to ship with the code. I kept each game's k largest
+weights and rounded them to float16 (`ease-top:<k>` in [eval/time_split.py](../eval/time_split.py)), choosing on
+val. Keeping the largest by value lost 0.002 at every k: the negative weights matter, they push down games that
+the liked ones' fans avoid. Keeping the largest by size, negative ones too, lost 0.001 at k = 200 and nothing at
+1,000; float16 alone lost nothing. One run on test:
+
+| system | test recall@10 | gap vs full EASE |
+|---|---|---|
+| EASE, full (447 MB) | 0.064 | |
+| 200 weights per game, float16 (8 MB) | 0.065 | +0.000 (-0.001 to +0.002) |
+| 1,000 weights per game, float16 | 0.065 | +0.001 (-0.000 to +0.002) |
+
+So the page can run from a small copy: [recs/bundle.py](../recs/bundle.py) writes it with the catalogue and
+SASRec's weights into a 19.8 MB zip, and on the demo library the page's top ten are the same games in the same
+order as with the full matrix.
+
 ## New games
 
 ### Cold start: tags alone found nothing; fresh tags times popularity found a little

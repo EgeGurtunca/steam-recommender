@@ -31,14 +31,34 @@ class EASE:
         np.save(Path(folder) / "b.npy", self.b)
         np.save(Path(folder) / "items.npy", self.item_ids)
 
+    def save_small(self, path, k: int = 200) -> None:
+        """Each game's k largest weights by size, in float16: 8 MB instead of 447. On the time split it found the
+        same as the full matrix (eval/time_split.py, ease-top:200); dropping the negative weights did not."""
+        idx = np.argpartition(-np.abs(self.b), k, axis=1)[:, :k].astype(np.int16)
+        np.savez_compressed(path, idx=idx, w=np.take_along_axis(self.b, idx, axis=1).astype(np.float16),
+                            items=self.item_ids)
+
+    @classmethod
+    def load_small(cls, path) -> "EASE":
+        f = np.load(path)
+        e = cls.__new__(cls)
+        e.item_ids, e.fallback = f["items"], ()
+        e.b = np.zeros((len(e.item_ids),) * 2, dtype=np.float32)
+        np.put_along_axis(e.b, f["idx"].astype(np.int64), f["w"].astype(np.float32), axis=1)
+        e.index = {int(a): i for i, a in enumerate(e.item_ids)}
+        return e
+
     @classmethod
     def load_or_build(cls, folder) -> "EASE":
-        """The page's weights: trained on every positive the first time (about 20 s), then loaded."""
+        """The page's weights: the full matrix if built, else the small copy (recs/bundle.py), else trained on every
+        positive (about 20 s) and saved."""
         from pathlib import Path
         from recs import data
         from recs.popularity import Popularity
         if (Path(folder) / "b.npy").exists():
             return cls.load(folder)
+        if (Path(folder) / "small.npz").exists():
+            return cls.load_small(Path(folder) / "small.npz")
         train = data.build_interactions(*data.load_positives(), exclude_users=set())
         ease = cls(train, fallback=Popularity(train).ranking)
         ease.save(folder)

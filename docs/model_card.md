@@ -53,7 +53,8 @@ For scale: popularity finds 0.021 to 0.026 on the same next-year tasks. The rand
 twice the next-year ones; the next-year setting is the one a deployed recommender faces.
 
 Speed and size: the page starts in about 1.2 s once the weights exist (EASE trains in about 20 s the first time),
-ranks one library in about 0.3 s on a laptop CPU and holds about 770 MB, most of it EASE's matrix.
+ranks one library in about 0.3 s on a laptop CPU and holds about 770 MB, most of it EASE's matrix. A copy of EASE
+with each game's 200 largest weights in float16 is 8 MB and scored the same on test (+0.000, -0.001 to +0.002).
 
 ## Limits and biases
 

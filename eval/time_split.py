@@ -164,6 +164,15 @@ def build(name: str, systems: Systems, users, apps, hours, dates, keep) -> objec
                             fallback=systems.popularity.ranking)
         nudge.name = name
         return nudge
+    if name.startswith("ease-top:"):  # "ease-top:<k>": each game keeps its k largest weights by size, in float16
+        base, k = systems.get("ease"), int(name.split(":")[1])
+        b = base.b.copy()
+        if k < b.shape[1]:
+            size = np.abs(b)
+            b[size < np.partition(size, -k, axis=1)[:, -k:-k + 1]] = 0.0
+        e = EASE.__new__(EASE)
+        e.__dict__ = dict(base.__dict__, name=name, b=b.astype(np.float16).astype(np.float32))
+        return e
     if name.startswith("ease+recent:"):  # "ease+recent:<beta>"
         lately = keep & (dates >= cutoff - np.timedelta64(RECENT_DAYS, "D"))
         ids, counts = np.unique(apps[lately], return_counts=True)
@@ -193,7 +202,8 @@ def main() -> None:
     ap.add_argument("--diversify", type=float, help="pick each system's top 60 again for tag variety (lambda)")
     ap.add_argument("--systems", default="popularity,content,als,ease",
                     help="also pop-recent:<days>, ease-decay:<half-life days>, ease+recent:<beta>, "
-                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, ease+sasrec-np:<gamma>")
+                         "ease-userdecay:<half-life days>, markov, ease+markov:<gamma>, sasrec, ease+sasrec-np:<gamma>, "
+                         "ease-top:<k>")
     args = ap.parse_args()
 
     users, apps, hours, dates = positive_dates()

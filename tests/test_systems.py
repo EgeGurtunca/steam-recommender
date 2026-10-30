@@ -193,3 +193,14 @@ def test_the_bridge_gives_a_game_with_no_players_a_place_among_the_known_ones():
     vectors = {1: [1.0, 0.0, 0.1], 2: [0.9, 0.1, 0.0], 3: [0.0, 1.0, 0.1], 4: [0.1, 0.9, 0.0], 5: [0.95, 0.05, 0.0]}
     b = Bridge(als, vectors, alpha=0.01)
     assert b.recommend({1: 10.0, 2: 10.0}, 1) == [5]
+
+
+def test_the_small_ease_keeps_each_games_largest_weights_negative_ones_too(tmp_path):
+    from recs.ease import EASE
+    e = EASE(two_groups(), lam=1.0)
+    e.b = np.asarray([[0, 0.5, -0.9, 0.1], [0.5, 0, 0.2, -0.05], [-0.9, 0.2, 0, 0.3], [0.1, -0.05, 0.3, 0]], np.float32)
+    (tmp_path / "ease").mkdir()
+    e.save_small(tmp_path / "ease" / "small.npz", k=2)
+    small = EASE.load_or_build(tmp_path / "ease")  # no b.npy: the small copy, no training
+    assert np.allclose(small.b, [[0, 0.5, -0.9, 0], [0.5, 0, 0.2, 0], [-0.9, 0, 0, 0.3], [0.1, 0, 0.3, 0]], atol=1e-3)
+    assert small.recommend({1: 1.0}, 1) == e.recommend({1: 1.0}, 1)

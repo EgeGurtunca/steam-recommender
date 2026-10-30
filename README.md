@@ -165,6 +165,7 @@ for, how well it does and where it falls short is summed up in its [model card](
 - [With only three games shown, the same order holds.](docs/findings.md#with-three-games-the-order-still-holds)
 - [A rerank for variety cost nothing measurable, so the page uses it.](docs/findings.md#variety-cost-nothing-measurable)
 - [LightGCN, a graph neural network, landed below EASE and level with ALS.](docs/findings.md#a-graph-neural-network-did-not-beat-ease-either)
+- [Each game's 200 largest weights in float16 (8 MB, not 447) find the same as the full EASE.](docs/findings.md#an-8-mb-ease-finds-the-same-as-the-447-mb-one)
 
 **New games**
 
@@ -227,6 +228,10 @@ On a laptop the page starts in about 1.2 s (EASE trains itself in about 20 s the
 about 0.3 s and holds about 770 MB, most of it EASE's 10,816 x 10,816 matrix (`python -m eval.bench_page`). A
 test fails if one page takes over a second on a store of real size.
 
+Without the 2 GB of reviews: `python -m recs.bundle` packs what the page reads (both catalogues, SASRec's weights
+and a small EASE, see above) into `dist/demo-data.zip`, 19.8 MB with a notice of the data's sources and licenses.
+Unzipped into the repository's folder, `python -m recs.web` runs with no download and no training.
+
 Trying it on my own library found two problems the offline eval could not: a wallpaper program in the top 10,
 and a genre I had put about 2,000 hours into missing from the taste entirely. Hours were weighted by
 `log1p`, which squashed them so hard that a hundred short games outweighed three very long ones; `sqrt` fixed it.
@@ -257,8 +262,8 @@ package sets `OPENBLAS_NUM_THREADS=1` before numpy loads.
 pytest
 ```
 
-90 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
-frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, the description recommender and its bridge to ALS, each recommender (owned games never recommended, unknown games ignored, empty
+91 tests, no network, no model, no real data: the SQL build and the quality checks on tiny CSVs, the
+frozen splits (random and in time) and the latest-N view, the metrics and their bootstrap intervals, the variety rerank, the transition counts and recency weights, the description recommender and its bridge to ALS, the small EASE (largest weights by size, negative ones kept), each recommender (owned games never recommended, unknown games ignored, empty
 libraries fall back to popularity), the reranker's schema and its fallback when the model fails or returns
 duplicates, the store catalogue's broken header, the collector (paging, hashing, no raw ids), the popularity weight, reading a profile link (vanity and numeric, private libraries), the taste profile (rare tags over common ones, long-played over many short games), the non-game filter, the tag links for the graph, the page's data (owned games and programs never recommended, reasons in the page's order, the demo library calling no one, the latest played games weighing most, the game behind each card, Steam's errors reaching the page without the API key, one page in under a second, the last two weeks' own picks, play together by least misery), SASRec's numpy forward pass (no step sees a later game), the explainer keeping ALS's order and checking which sentences are grounded, title matching with ™ and odd spacing, and stopping Ollama with its child process.
 
