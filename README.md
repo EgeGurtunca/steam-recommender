@@ -203,7 +203,8 @@ linked to the tags that describe the same games across the store (Jaccard over w
 tastes pull together. A switch shows the last two weeks instead of all time, which is where a change in taste
 shows up. Below it, cards for "play next" and "new since 2024", with links to the store pages and the price from the
 October 2026 catalogue. "Play next" can rank from all your games or only the last two weeks' (a change of taste shows
-there first), and can be limited to free games or a price. Two sliders, popular to niche and
+there first), and can be limited to free games or a price. "Not for me" on a card hides that game from both lists, kept in your browser only;
+one button brings them all back. Two sliders, popular to niche and
 older to newer, borrowed from Steam's own interactive recommender, re-sort the ranker's top 60 in the page: each
 adds the game's percentile among those 60 (review count, release year) to the ranker's order, so at the middle
 the order is untouched. "Niche" is relative: EASE only knows games with 50 or more reviews in 2022, so the far end is less known,

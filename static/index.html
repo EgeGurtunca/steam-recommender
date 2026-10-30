@@ -30,7 +30,10 @@
   #graph { width: 100%; height: 480px; display: block; }
   .tip { position: fixed; pointer-events: none; background: #0b0f15; border: 1px solid var(--line); padding: 5px 9px; border-radius: 6px; font-size: 13px; opacity: 0; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; display: block; }
+  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: relative; }
+  .card a { text-decoration: none; color: inherit; display: block; }
+  .card .nope { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; background: #0b1520cc; color: var(--muted); border: 1px solid var(--line); opacity: 0; }
+  .card:hover .nope, .card .nope:focus { opacity: 1; }
   .card:hover { border-color: var(--accent); }
   .card img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: var(--line); }
   .card div { padding: 9px 11px; }
@@ -76,7 +79,7 @@
         <label class="pick">From <select id="from"><option value="all">all my games</option><option value="recent">the last two weeks</option></select></label>
         <label class="pick">Price <select id="price"><option value="">any</option><option value="0">free</option><option value="10">under $10</option><option value="20">under $20</option></select></label>
       </div>
-      <p id="nextnote"></p>
+      <p id="nextnote"></p> <button class="ghost hidden" id="unhide"></button>
       <div class="cards" id="next"></div></section>
     <section><h2>New since 2024 that fit your tags</h2><div class="cards" id="new"></div></section>
     <section><h2>Play together</h2>
@@ -151,15 +154,27 @@ function render() {
     stat(data.games, "games owned"), stat(data.played, "played 2 hours or more"),
     stat(data.hours.toLocaleString("en"), "hours in total"),
     stat(multi + "%", "of hours in multiplayer or co-op", bar));
-  playNext(); cards("new", data.new); drawGraph();
+  saveHidden(); drawGraph();  // saveHidden draws both lists and the "show hidden" button
 }
+
+// "Not for me" hides a game from both lists, in this browser only (nothing is sent anywhere)
+let hidden = new Set();
+try { hidden = new Set(JSON.parse(localStorage.getItem("hidden") || "[]")); } catch {}
+function saveHidden() {
+  try { localStorage.setItem("hidden", JSON.stringify([...hidden])); } catch {}
+  $("unhide").classList.toggle("hidden", !hidden.size);
+  $("unhide").textContent = `Show ${hidden.size} hidden game${hidden.size === 1 ? "" : "s"} again`;
+  playNext(); drawNew();
+}
+function drawNew() { cards("new", data.new.filter(g => !hidden.has(g.app_id)), true); }
+$("unhide").addEventListener("click", () => { hidden.clear(); saveHidden(); });
 
 // Steam's interactive recommender has the same two sliders. EASE's order is the base score; each slider adds
 // the game's percentile among the 60 candidates (review count, release year), so at 0 and 0 it is EASE's top 10.
 function playNext() {
   // "the last two weeks" ranks from those games alone; the price limit filters the 60 before the sliders sort them
   const from = $("from").value, max = $("price").value;
-  let c = from === "recent" ? data.next_recent : data.next;
+  let c = (from === "recent" ? data.next_recent : data.next).filter(g => !hidden.has(g.app_id));
   if (max !== "") c = c.filter(g => g.price != null && (max === "0" ? g.price === 0 : g.price < +max));
   $("nextnote").textContent = c.length ? "" : from === "recent" && !data.next_recent.length
     ? "Nothing played in the last two weeks that the model knows." : "No candidate at this price.";
@@ -171,15 +186,15 @@ function playNext() {
   const niche = +$("pop").value, newer = +$("age").value;
   shown = c.map((g, i) => ({ g, s: 1 - i / n - niche * pop[i] + newer * age[i] }))
            .sort((a, b) => b.s - a.s).slice(0, 10).map(x => x.g);
-  cards("next", shown);
+  cards("next", shown, true);
   $("why").disabled = false; $("why").textContent = "Why these? (local LLM, about 30 s)";
 }
 ["pop", "age", "from", "price"].forEach(id => $(id).addEventListener("input", () => data && playNext()));
 
-function cards(id, games) {
+function cards(id, games, dismiss) {
   $(id).replaceChildren(...games.map(g => {
-    const a = document.createElement("a"); a.className = "card"; a.href = g.url; a.target = "_blank"; a.rel = "noopener";
-    a.dataset.app = g.app_id;
+    const card = document.createElement("div"); card.className = "card"; card.dataset.app = g.app_id;
+    const a = document.createElement("a"); a.href = g.url; a.target = "_blank"; a.rel = "noopener";
     const img = document.createElement("img"); img.src = g.header; img.alt = ""; img.loading = "lazy";
     const d = document.createElement("div");
     const b = document.createElement("b"); b.textContent = g.title;
@@ -195,7 +210,14 @@ function cards(id, games) {
       const o = document.createElement("small"); o.className = "because";
       o.textContent = g.owned_by === "you" ? "You own it" : "Your friend owns it"; d.append(o);
     }
-    a.append(img, d); return a;
+    a.append(img, d); card.append(a);
+    if (dismiss) {
+      const x = document.createElement("button"); x.className = "nope"; x.textContent = "Not for me";
+      x.setAttribute("aria-label", "Not for me: hide " + g.title);
+      x.addEventListener("click", () => { hidden.add(g.app_id); saveHidden(); });
+      card.append(x);
+    }
+    return card;
   }));
 }
 
