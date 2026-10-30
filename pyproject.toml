@@ -1,6 +1,6 @@
 [project]
 name = "steam-recommender"
-version = "0.1.0"
+version = "0.2.0"
 description = "Steam game recommendations from a library: EASE nudged by SASRec, measured on users the models never saw, with a local page."
 requires-python = ">=3.12"
 license = "MIT"

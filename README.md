@@ -24,6 +24,17 @@ Below is how much, how sure, and why that is still useful to know.
 
 _The local page ([below](#your-own-profile)) on a made-up library: type `demo` in the box, or open `/?demo`._
 
+**Try it in two minutes**, without the 2 GB dataset: the page's data (19.5 MB: both catalogues and the model weights,
+no player data) is attached to the [latest release](https://github.com/EgeGurtunca/steam-recommender/releases/latest).
+
+```bash
+git clone https://github.com/EgeGurtunca/steam-recommender && cd steam-recommender
+python -m venv .venv && .venv/Scripts/pip install .      # .venv/bin/pip on Linux and macOS
+curl -LO https://github.com/EgeGurtunca/steam-recommender/releases/latest/download/demo-data.zip
+python -c "import zipfile; zipfile.ZipFile('demo-data.zip').extractall('.')"
+.venv/Scripts/python -m recs.web                          # then open http://127.0.0.1:8000/?demo
+```
+
 **Stack:** Python 3.12 · DuckDB (SQL over a 2 GB CSV) · numpy / scipy · implicit (ALS) · scikit-learn (TF-IDF) ·
 Ollama (`gemma4:12b`) · PyTorch (SASRec) · pytest
 
@@ -32,7 +43,9 @@ Ollama (`gemma4:12b`) · PyTorch (SASRec) · pytest
 The Kaggle dataset [Game Recommendations on Steam](https://www.kaggle.com/datasets/antonkozyriev/game-recommendations-on-steam)
 (snapshot of August 2024): 41.2M reviews from 14.3M anonymised users on 50.9K apps, each with the date, whether
 the user recommends the game, and the hours they had played by then. Reviews run from 2010 to the end of 2022.
-The raw files are not in this repo.
+The raw files are not in this repo. The frozen evaluation groups in `eval/*.json` are: each holds a few
+thousand of the dataset's anonymised user numbers with their games, so that every result here can be
+scored again on the same users.
 
 [recs/data.py](recs/data.py) turns it into training data in SQL, with checks that stop the build on bad data
 (negative hours, dates outside the expected range, reviewed apps missing from the game list):
