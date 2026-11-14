@@ -26,17 +26,24 @@ class InOrder:
         return self.ranker.recommend({a: i for i, a in enumerate(library, 1)}, k)
 
 
+def find_user(split, user: int):
+    """The visible games of a frozen eval user, or None if no eval group holds that user."""
+    return next((e["visible"] for p in split.values() for e in p if e["user"] == user), None)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--user", type=int)
-    ap.add_argument("--library", type=Path)
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--user", type=int)
+    src.add_argument("--library", type=Path)
     ap.add_argument("-k", type=int, default=10)
     args = ap.parse_args()
-    split = load_split()
     if args.library:
         library = {int(a): float(h) for a, h in json.loads(args.library.read_text(encoding="utf-8")).items()}
     else:
-        library = next(e["visible"] for p in split.values() for e in p if e["user"] == args.user)
+        library = find_user(load_split(), args.user)
+        if library is None:
+            ap.error(f"user {args.user} is not in the frozen eval groups (eval/*.json)")
     catalog = load_catalog()
     explainer = Explainer(InOrder(page_ranker(EASE.load_or_build(BUILD_DIR / "ease"))), catalog)
     print("Played most:")
